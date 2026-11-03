@@ -80,6 +80,15 @@ public class ChanceCalculatorTest
 	}
 
 	@Test
+	public void hitThroughPrayerWithoutSpecialCountsDamageDealt()
+	{
+		// Prayer only reduces this attack: a 20 through prayer at 30 HP is not a chance at a 60 max.
+		Attack corp = Attack.builder().source("Corporeal Beast").style(AttackStyle.MAGIC).max(60).prayed(true)
+			.build();
+		assertNull(ChanceCalculator.evaluate(one(20, corp), 10));
+	}
+
+	@Test
 	public void specialStyle()
 	{
 		Attack rockfall = Attack.builder().source("Scurrius").style(AttackStyle.SPECIAL).max(22)

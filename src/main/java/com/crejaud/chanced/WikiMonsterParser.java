@@ -130,7 +130,9 @@ final class WikiMonsterParser
 		Matcher l = LABEL.matcher(rest);
 		String rawLabel = (l.find() ? l.group(1) : rest).trim();
 		String label = rawLabel.toLowerCase(Locale.ROOT);
-		if (label.contains("does not attack"))
+		// "without Nose peg", "with anti-dragon shield": maxes for gear the player may or may not
+		// wear. Counting them would alert players who are protected.
+		if (label.contains("does not attack") || label.startsWith("with ") || label.contains("without "))
 		{
 			return;
 		}

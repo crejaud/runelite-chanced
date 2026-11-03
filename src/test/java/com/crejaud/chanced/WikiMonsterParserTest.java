@@ -90,6 +90,16 @@ public class WikiMonsterParserTest
 	}
 
 	@Test
+	public void skipsGearConditionalMaxes()
+	{
+		MonsterInfo spectre = parse("Magic", "14", "44 (without Nose peg)");
+		assertEquals(14, spectre.max(AttackStyle.MAGIC));
+		assertFalse(spectre.has(AttackStyle.SPECIAL));
+		assertFalse(parse(null, "60 (with anti-dragon shield)").has(AttackStyle.SPECIAL));
+		assertTrue(parse("Melee", "20 (Ranged/Melee; without insulated boots)").getMaxHits().isEmpty());
+	}
+
+	@Test
 	public void skipsNonAttacks()
 	{
 		assertTrue(parse(null, "0 (Does not attack)").getMaxHits().isEmpty());

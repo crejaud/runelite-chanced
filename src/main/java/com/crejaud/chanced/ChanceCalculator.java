@@ -85,10 +85,11 @@ final class ChanceCalculator
 		}
 		else if (attack.getStyle().isNormal() && attack.isPrayed())
 		{
-			// The right prayer blocks it down to prayedMax, unless it went through anyway: a
-			// special (prayer smash), or the prayer came too late.
-			max = throughPrayer(attack, dealt)
-				? (attack.getSpecialMax() > 0 ? attack.getSpecialMax() : attack.getMax())
+			// The right prayer blocks it down to prayedMax. A hit through it anyway is the
+			// NPC's special (prayer smash) when it has one; otherwise the prayer only reduces
+			// this attack, by an amount the wiki does not give, so count the damage dealt.
+			max = throughPrayer(attack, dealt) && attack.getSpecialMax() > 0
+				? attack.getSpecialMax()
 				: attack.getPrayedMax();
 		}
 		return Math.max(max, dealt);

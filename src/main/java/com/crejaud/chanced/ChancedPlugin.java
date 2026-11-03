@@ -18,6 +18,7 @@ import net.runelite.api.Client;
 import net.runelite.api.HitsplatID;
 import net.runelite.api.NPC;
 import net.runelite.api.Player;
+import net.runelite.api.PlayerComposition;
 import net.runelite.api.Prayer;
 import net.runelite.api.Projectile;
 import net.runelite.api.Skill;
@@ -29,6 +30,7 @@ import net.runelite.api.events.GameTick;
 import net.runelite.api.events.HitsplatApplied;
 import net.runelite.api.events.ProjectileMoved;
 import net.runelite.api.gameval.VarbitID;
+import net.runelite.api.kit.KitType;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.chat.ChatMessageBuilder;
 import net.runelite.client.chat.ChatMessageManager;
@@ -444,14 +446,32 @@ public class ChancedPlugin extends Plugin
 			return HunllefRules.attack(npc.getId(), name, unexplained ? AttackStyle.SPECIAL : style, prayed,
 				HunllefRules.armourPoints(client.getLocalPlayer()));
 		}
+		int specialMax = info.max(AttackStyle.SPECIAL);
+		if (specialMax > 0 && DragonfireRules.applies(info.getSpecialName()))
+		{
+			specialMax = DragonfireRules.max(specialMax, "King Black Dragon".equals(info.getName()),
+				dragonfireProtection(prayers));
+		}
 		return Attack.builder()
 			.source(name)
 			.style(style)
-			.max(info.max(style))
+			.max(style == AttackStyle.SPECIAL ? specialMax : info.max(style))
 			.prayed(prayed)
-			.specialMax(info.max(AttackStyle.SPECIAL))
+			.specialMax(specialMax)
 			.specialName(info.getSpecialName())
 			.build();
+	}
+
+	private DragonfireRules.Protection dragonfireProtection(Set<AttackStyle> prayers)
+	{
+		DragonfireRules.Protection p = new DragonfireRules.Protection();
+		Player local = client.getLocalPlayer();
+		PlayerComposition comp = local != null ? local.getPlayerComposition() : null;
+		p.shield = comp != null && DragonfireRules.SHIELDS.contains(comp.getEquipmentId(KitType.SHIELD));
+		p.prayer = prayers.contains(AttackStyle.MAGIC);
+		p.antifire = client.getVarbitValue(VarbitID.ANTIFIRE_POTION) > 0;
+		p.superAntifire = client.getVarbitValue(VarbitID.SUPER_ANTIFIRE_POTION) > 0;
+		return p;
 	}
 
 	/**
