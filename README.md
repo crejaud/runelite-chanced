@@ -9,7 +9,9 @@ In chat:
 
 On Discord:
 
-> **Durial321** was chanced by **Scurrius**: max hit **8** (Magic), hit **0** with 8 HP left. Prayer: Protect from Melee. World 302.
+> **Chanced!**
+> **Durial321** was chanced by **Scurrius**
+> Max hit 8 · Actual hit 0 · HP 8 → 8 · Attack style Magic · Your prayer Protect from Melee · World 302
 
 ## How a chance is decided
 

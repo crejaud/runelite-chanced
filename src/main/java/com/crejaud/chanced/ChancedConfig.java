@@ -20,8 +20,8 @@ public interface ChancedConfig extends Config
 		+ "%STYLE% %PRAYER% %WORLD%";
 	String DEFAULT_CHAT_TEMPLATE =
 		"You were chanced by %SOURCE%: max hit %MAXHIT% (%STYLE%), hit %DAMAGE%, %HPLEFT% HP left.";
-	String DEFAULT_DISCORD_TEMPLATE = "%USERNAME% was chanced by %SOURCE%: max hit %MAXHIT% (%STYLE%), "
-		+ "hit %DAMAGE% with %HPLEFT% HP left. Prayer: %PRAYER%. World %WORLD%.";
+	/** The embed's fields already show max hit, actual hit, HP, style, prayer and world. */
+	String DEFAULT_DISCORD_TEMPLATE = "%USERNAME% was chanced by %SOURCE%";
 
 	@ConfigSection(name = "Chat message", description = "Game chat message when you get chanced", position = 0)
 	String chatSection = "chat";

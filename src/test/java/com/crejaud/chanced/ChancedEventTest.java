@@ -43,8 +43,7 @@ public class ChancedEventTest
 			"Powered by Chanced", ChancedConfig.DEFAULT_FOOTER_ICON);
 		JsonObject embed = payload.getAsJsonArray("embeds").get(0).getAsJsonObject();
 		assertEquals("Chanced!", embed.get("title").getAsString());
-		assertEquals("**Durial321** was chanced by **Scurrius**: max hit **8** (Magic), hit **0** with 8 HP left. "
-			+ "Prayer: Protect from Melee. World 302.", embed.get("description").getAsString());
+		assertEquals("**Durial321** was chanced by **Scurrius**", embed.get("description").getAsString());
 		assertEquals(6, embed.getAsJsonArray("fields").size());
 		assertEquals("attachment://chanced.png", embed.getAsJsonObject("image").get("url").getAsString());
 		assertEquals("Powered by Chanced", embed.getAsJsonObject("footer").get("text").getAsString());
