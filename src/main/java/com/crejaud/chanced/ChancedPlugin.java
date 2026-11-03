@@ -660,7 +660,8 @@ public class ChancedPlugin extends Plugin
 
 	private void playSound()
 	{
-		if (config.soundType() != SoundType.CUSTOM_FILE)
+		SoundType type = config.soundType();
+		if (type == SoundType.GAME_SOUND)
 		{
 			playGameSound();
 			return;
@@ -670,19 +671,45 @@ public class ChancedPlugin extends Plugin
 		{
 			try
 			{
-				audioPlayer.play(getPluginDirectory().joinSegment(ChancedConfig.CUSTOM_SOUND_FILE), gain);
+				if (type == SoundType.CUSTOM_FILE)
+				{
+					audioPlayer.play(getPluginDirectory().joinSegment(ChancedConfig.CUSTOM_SOUND_FILE), gain);
+				}
+				else
+				{
+					audioPlayer.play(ChancedPlugin.class, ChancedConfig.DEFAULT_SOUND_RESOURCE, gain);
+				}
 			}
 			catch (IOException | UnsupportedAudioFileException | LineUnavailableException | RuntimeException e)
 			{
-				log.debug("Could not play the custom sound", e);
-				clientThread.invoke(() ->
-				{
-					chat("Chanced: could not play " + ChancedConfig.CUSTOM_SOUND_FILE
-						+ " from the sound folder; playing the game sound instead.");
-					playGameSound();
-				});
+				log.debug("Could not play the {} sound", type, e);
+				clientThread.invoke(() -> soundFailed(type, gain));
 			}
 		});
+	}
+
+	/** A custom file that cannot play falls back to the Chanced sound; that one falls back to the game sound. */
+	private void soundFailed(SoundType type, float gain)
+	{
+		if (type == SoundType.CUSTOM_FILE)
+		{
+			chat("Chanced: could not play " + ChancedConfig.CUSTOM_SOUND_FILE
+				+ " from the sound folder; playing the Chanced sound instead.");
+			executor.execute(() ->
+			{
+				try
+				{
+					audioPlayer.play(ChancedPlugin.class, ChancedConfig.DEFAULT_SOUND_RESOURCE, gain);
+				}
+				catch (IOException | UnsupportedAudioFileException | LineUnavailableException | RuntimeException e)
+				{
+					log.debug("Could not play the Chanced sound", e);
+					clientThread.invoke(this::playGameSound);
+				}
+			});
+			return;
+		}
+		playGameSound();
 	}
 
 	private void playGameSound()

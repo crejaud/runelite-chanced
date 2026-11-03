@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 enum SoundType
 {
+	CHANCED_SOUND("Chanced sound"),
 	GAME_SOUND("Game sound"),
 	CUSTOM_FILE("Custom file");
 

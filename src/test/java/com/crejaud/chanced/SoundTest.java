@@ -1,6 +1,12 @@
 package com.crejaud.chanced;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
+import java.io.BufferedInputStream;
+import java.io.InputStream;
+import javax.sound.sampled.AudioInputStream;
+import javax.sound.sampled.AudioSystem;
 import net.runelite.api.SoundEffectVolume;
 import org.junit.Test;
 
@@ -13,6 +19,8 @@ public class SoundTest
 	private static final int TENTH = 10;
 	private static final float TENTH_GAIN_DB = -20f;
 	private static final float DB_TOLERANCE = 0.001f;
+	/** An alert sting, not a song. */
+	private static final float MAX_SOUND_SECONDS = 2f;
 
 	@Test
 	public void volumePercentMapsToClientScale()
@@ -44,6 +52,22 @@ public class SoundTest
 		assertEquals(0f, full, DB_TOLERANCE);
 		assertEquals(TENTH_GAIN_DB, tenth, DB_TOLERANCE);
 		assertEquals(0f, tooLoud, DB_TOLERANCE);
+	}
+
+	@Test
+	public void bundledSoundIsAPlayableWav() throws Exception
+	{
+		// GIVEN the Chanced sound bundled in the plugin
+		InputStream resource = ChancedPlugin.class.getResourceAsStream(ChancedConfig.DEFAULT_SOUND_RESOURCE);
+		assertNotNull(resource);
+
+		// WHEN Java's sound system opens it
+		try (AudioInputStream audio = AudioSystem.getAudioInputStream(new BufferedInputStream(resource)))
+		{
+			// THEN it is a short clip
+			float seconds = audio.getFrameLength() / audio.getFormat().getFrameRate();
+			assertTrue(seconds > 0 && seconds < MAX_SOUND_SECONDS);
+		}
 	}
 
 	// no-gherkin
