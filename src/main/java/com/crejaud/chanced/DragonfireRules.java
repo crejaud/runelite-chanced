@@ -18,6 +18,18 @@ final class DragonfireRules
 		ItemID.DRAGONFIRE_WARD, ItemID.DRAGONFIRE_WARD_UNCHARGED,
 		ItemID.WYVERN_SHIELD, ItemID.WYVERN_SHIELD_UNCHARGED);
 
+	/** The wiki's maxes for chromatic dragons (also brutal, lava, frost and reanimated). */
+	private static final int CHROMATIC_UNPROTECTED = 50;
+	private static final int CHROMATIC_SHIELD = 5;
+	private static final int CHROMATIC_PRAYER = 10;
+	private static final int CHROMATIC_ANTIFIRE = 35;
+	/** The wiki's maxes for the King Black Dragon. */
+	private static final int KBD_UNPROTECTED = 65;
+	private static final int KBD_SHIELD = 15;
+	private static final int KBD_PRAYER = 20;
+	private static final int KBD_ANTIFIRE = 50;
+	private static final int KBD_PRAYER_ANTIFIRE = 5;
+
 	/** Protection the player has up. */
 	static final class Protection
 	{
@@ -46,9 +58,7 @@ final class DragonfireRules
 	 */
 	static int max(int unprotected, boolean kbd, Protection p)
 	{
-		// Numerators over the unprotected max: chromatic 50 (also brutal, lava, frost,
-		// reanimated) and King Black Dragon 65.
-		int base = kbd ? 65 : 50;
+		int base = kbd ? KBD_UNPROTECTED : CHROMATIC_UNPROTECTED;
 		int left;
 		boolean anyAntifire = p.antifire || p.superAntifire;
 		if (p.superAntifire && !kbd)
@@ -61,15 +71,15 @@ final class DragonfireRules
 		}
 		else if (p.shield)
 		{
-			left = kbd ? 15 : 5;
+			left = kbd ? KBD_SHIELD : CHROMATIC_SHIELD;
 		}
 		else if (p.prayer && anyAntifire)
 		{
-			left = kbd ? (p.superAntifire ? 0 : 5) : 0;
+			left = kbd && !p.superAntifire ? KBD_PRAYER_ANTIFIRE : 0;
 		}
 		else if (p.prayer)
 		{
-			left = kbd ? 20 : 10;
+			left = kbd ? KBD_PRAYER : CHROMATIC_PRAYER;
 		}
 		else if (p.superAntifire)
 		{
@@ -77,12 +87,13 @@ final class DragonfireRules
 		}
 		else if (p.antifire)
 		{
-			left = kbd ? 50 : 35;
+			left = kbd ? KBD_ANTIFIRE : CHROMATIC_ANTIFIRE;
 		}
 		else
 		{
 			return unprotected;
 		}
+		// Scale the table's value to this dragon's unprotected max, rounding up.
 		return (unprotected * left + base - 1) / base;
 	}
 }

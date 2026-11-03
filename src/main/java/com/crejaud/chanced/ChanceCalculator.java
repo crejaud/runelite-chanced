@@ -11,6 +11,7 @@ import java.util.Map;
 final class ChanceCalculator
 {
 	static final int PVP_PRAYER_PERCENT = 60;
+	private static final int PERCENT = 100;
 
 	private ChanceCalculator()
 	{
@@ -80,7 +81,7 @@ final class ChanceCalculator
 		{
 			if (attack.isPrayed())
 			{
-				max = max * PVP_PRAYER_PERCENT / 100;
+				max = max * PVP_PRAYER_PERCENT / PERCENT;
 			}
 		}
 		else if (attack.getStyle().isNormal() && attack.isPrayed())

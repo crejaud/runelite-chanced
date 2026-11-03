@@ -23,6 +23,14 @@ class PvpEstimator
 	private static final int PRAYER_BONUS = 123;
 	/** Ice Barrage, the biggest common PvP spell base. */
 	private static final int MAGIC_BASE = 30;
+	private static final int PERCENT = 100;
+	/** Max hit formula: +8 to the effective level, +3 more for the aggressive stance. */
+	private static final int EFFECTIVE_LEVEL_BONUS = 8;
+	private static final int AGGRESSIVE_STANCE = 3;
+	private static final int STRENGTH_OFFSET = 64;
+	private static final int MAX_HIT_DIVISOR = 640;
+	/** Adds half the divisor so the division rounds to nearest. */
+	private static final int ROUND_HALF = MAX_HIT_DIVISOR / 2;
 	/** Rings and ammo are not visible on other players: assume a berserker ring and dragon bolts. */
 	static final int RING_STRENGTH = 8;
 	static final int AMMO_STRENGTH = 122;
@@ -111,22 +119,28 @@ class PvpEstimator
 		{
 			case RANGED:
 			{
-				int effective = BOOSTED_RANGED * PRAYER_BONUS / 100 + 8;
+				int effective = BOOSTED_RANGED * PRAYER_BONUS / PERCENT + EFFECTIVE_LEVEL_BONUS;
 				// Thrown weapons and blowpipes carry their own ranged strength.
 				int rstr = gear.rstr + (gear.weaponRstr > 0 ? 0 : ammoRstr);
-				max = (effective * (rstr + 64) + 320) / 640;
+				max = maxFromEffective(effective, rstr);
 				break;
 			}
 			case MAGIC:
-				max = (int) (MAGIC_BASE * (1 + gear.mdmg / 100f));
+				max = (int) (MAGIC_BASE * (1 + gear.mdmg / PERCENT));
 				break;
 			default:
 			{
-				int effective = BOOSTED_STRENGTH * PRAYER_BONUS / 100 + 3 + 8;
-				max = (effective * (gear.str + ringStr + 64) + 320) / 640;
+				int effective = BOOSTED_STRENGTH * PRAYER_BONUS / PERCENT + AGGRESSIVE_STANCE + EFFECTIVE_LEVEL_BONUS;
+				max = maxFromEffective(effective, gear.str + ringStr);
 				break;
 			}
 		}
-		return max * (100 + specMarginPercent) / 100;
+		return max * (PERCENT + specMarginPercent) / PERCENT;
+	}
+
+	/** The game's max hit formula: effective level times (strength bonus + 64) over 640, rounded. */
+	private static int maxFromEffective(int effectiveLevel, int strengthBonus)
+	{
+		return (effectiveLevel * (strengthBonus + STRENGTH_OFFSET) + ROUND_HALF) / MAX_HIT_DIVISOR;
 	}
 }

@@ -51,6 +51,12 @@
 			<property name="tokens" value="COMMA"/>
 		</module>
 		<module name="UnusedImports"/>
+		<!-- Chanced: every number but -1, 0 and 1 gets a name (constants and annotations are exempt) -->
+		<module name="MagicNumber">
+			<property name="ignoreNumbers" value="-1, 0, 1"/>
+			<property name="ignoreAnnotation" value="true"/>
+			<property name="ignoreHashCodeMethod" value="true"/>
+		</module>
 		<module name="SuppressionCommentFilter"/>
 	</module>
 	<module name="RegexpMultiline">

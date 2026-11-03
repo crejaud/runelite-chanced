@@ -33,18 +33,26 @@ final class HunllefRules
 	private static final int[] CRYSTALLINE_UNPRAYED = {51, 41, 34, 26};
 	private static final int[] CRYSTALLINE_TORNADO = {20, 16, 13, 10};
 
+	private static final int T1 = 1;
+	private static final int T2 = 2;
+	private static final int T3 = 3;
+	/** Helm, body and legs. */
+	private static final int PIECES = 3;
+	/** Full T3: the top of the armour tables. */
+	private static final int MAX_POINTS = PIECES * T3;
+
 	private static final Map<Integer, Integer> ARMOUR_TIER = ImmutableMap.<Integer, Integer>builder()
-		.put(ItemID.GAUNTLET_HELMET_T1, 1).put(ItemID.GAUNTLET_HELMET_T2, 2).put(ItemID.GAUNTLET_HELMET_T3, 3)
-		.put(ItemID.GAUNTLET_CHESTPLATE_T1, 1).put(ItemID.GAUNTLET_CHESTPLATE_T2, 2)
-		.put(ItemID.GAUNTLET_CHESTPLATE_T3, 3)
-		.put(ItemID.GAUNTLET_PLATELEGS_T1, 1).put(ItemID.GAUNTLET_PLATELEGS_T2, 2)
-		.put(ItemID.GAUNTLET_PLATELEGS_T3, 3)
-		.put(ItemID.GAUNTLET_HELMET_T1_HM, 1).put(ItemID.GAUNTLET_HELMET_T2_HM, 2)
-		.put(ItemID.GAUNTLET_HELMET_T3_HM, 3)
-		.put(ItemID.GAUNTLET_CHESTPLATE_T1_HM, 1).put(ItemID.GAUNTLET_CHESTPLATE_T2_HM, 2)
-		.put(ItemID.GAUNTLET_CHESTPLATE_T3_HM, 3)
-		.put(ItemID.GAUNTLET_PLATELEGS_T1_HM, 1).put(ItemID.GAUNTLET_PLATELEGS_T2_HM, 2)
-		.put(ItemID.GAUNTLET_PLATELEGS_T3_HM, 3)
+		.put(ItemID.GAUNTLET_HELMET_T1, T1).put(ItemID.GAUNTLET_HELMET_T2, T2).put(ItemID.GAUNTLET_HELMET_T3, T3)
+		.put(ItemID.GAUNTLET_CHESTPLATE_T1, T1).put(ItemID.GAUNTLET_CHESTPLATE_T2, T2)
+		.put(ItemID.GAUNTLET_CHESTPLATE_T3, T3)
+		.put(ItemID.GAUNTLET_PLATELEGS_T1, T1).put(ItemID.GAUNTLET_PLATELEGS_T2, T2)
+		.put(ItemID.GAUNTLET_PLATELEGS_T3, T3)
+		.put(ItemID.GAUNTLET_HELMET_T1_HM, T1).put(ItemID.GAUNTLET_HELMET_T2_HM, T2)
+		.put(ItemID.GAUNTLET_HELMET_T3_HM, T3)
+		.put(ItemID.GAUNTLET_CHESTPLATE_T1_HM, T1).put(ItemID.GAUNTLET_CHESTPLATE_T2_HM, T2)
+		.put(ItemID.GAUNTLET_CHESTPLATE_T3_HM, T3)
+		.put(ItemID.GAUNTLET_PLATELEGS_T1_HM, T1).put(ItemID.GAUNTLET_PLATELEGS_T2_HM, T2)
+		.put(ItemID.GAUNTLET_PLATELEGS_T3_HM, T3)
 		.build();
 
 	private HunllefRules()
@@ -97,14 +105,14 @@ final class HunllefRules
 			.build();
 	}
 
-	/** Interpolates a full-set table (0, 3, 6, 9 points) at any point total, rounding up. */
+	/** Interpolates a full-set table (no armour, full T1, T2, T3) at any point total. */
 	static int scaled(int[] table, int points)
 	{
-		int p = Math.max(0, Math.min(9, points));
-		int i = Math.min(p / 3, 2);
+		int p = Math.max(0, Math.min(MAX_POINTS, points));
+		int i = Math.min(p / PIECES, table.length - 1 - 1);
 		int lo = table[i];
 		int hi = table[i + 1];
-		int rem = p - i * 3;
-		return lo - ((lo - hi) * rem) / 3;
+		int rem = p - i * PIECES;
+		return lo - ((lo - hi) * rem) / PIECES;
 	}
 }

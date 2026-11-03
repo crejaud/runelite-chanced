@@ -14,120 +14,238 @@ import org.junit.Test;
 
 public class WikiMonsterParserTest
 {
+	private static final int SCURRIUS_MELEE = 13;
+	private static final int SCURRIUS_MAGIC = 8;
+	private static final int SCURRIUS_RANGED = 7;
+	private static final int SCURRIUS_ROCKFALL = 22;
+	private static final int SCURRIUS_GROUP_MAGIC = 14;
+	private static final int SCURRIUS_GROUP_RANGED = 13;
+	private static final int SCURRIUS_GROUP_ROCKFALL = 24;
+	private static final int SCURRIUS_ALT_MELEE = 9;
+	private static final int SCURRIUS_SOLO_ID = 7222;
+	private static final int SCURRIUS_GROUP_ID = 7221;
+	private static final int GOBLIN_ID = 3028;
+	private static final int GOBLIN_ALT_ID = 3029;
+	private static final int GOBLIN_MAX = 1;
+	private static final int NON_ATTACKER_ID = 9999;
+
+	private static final int SLASHER_MAX = 36;
+	private static final int KRIL_MAGIC = 30;
+	private static final int KRIL_MELEE = 46;
+	private static final int KRIL_SPECIAL = 49;
+
+	private static final int MULTI_HIT = 7;
+	private static final int MULTI_COUNT = 2;
+	private static final int SUM_SECOND = 6;
+	private static final int CHOICE_LOW = 50;
+	private static final int CHOICE_HIGH = 60;
+	private static final int RANGE_LOW = 30;
+	private static final int RANGE_HIGH = 37;
+	private static final int DRAGONFIRE_MIN = 50;
+
+	private static final int AUTO_MAX = 31;
+	private static final int LIST_SPECIAL = 45;
+	private static final int BASE_MELEE = 22;
+	private static final int WHIRLWINDS = 64;
+	private static final int KNOCKBACK = 30;
+	private static final int BOTH_STYLES = 33;
+	private static final int MAGICAL_MELEE = 20;
+
+	private static final int SPECTRE_MAGIC = 14;
+	private static final int SPECTRE_UNPROTECTED = 44;
+	private static final int SHIELDED = 60;
+	private static final int BOOTLESS = 20;
+
 	private static MonsterInfo parse(String attackStyle, String... maxHits)
 	{
 		return WikiMonsterParser.parse("Test", Arrays.asList(maxHits),
 			attackStyle == null ? Collections.emptyList() : Collections.singletonList(attackStyle));
 	}
 
+	private static String row(int id, String name, String attackStyle, String... maxHits)
+	{
+		StringBuilder hits = new StringBuilder();
+		for (String h : maxHits)
+		{
+			hits.append(hits.length() == 0 ? "" : ",").append('"').append(h).append('"');
+		}
+		return "{\"id\":[\"" + id + "\"],\"max_hit\":[" + hits + "],\"name\":\"" + name
+			+ "\",\"attack_style\":[\"" + attackStyle + "\"]}";
+	}
+
 	@Test
 	public void labelledStyles()
 	{
-		MonsterInfo info = parse("Magic", "13 (Melee)", "8 (Magic)", "7 (Ranged)", "22 (Rockfall)");
-		assertEquals(13, info.max(AttackStyle.MELEE));
-		assertEquals(8, info.max(AttackStyle.MAGIC));
-		assertEquals(7, info.max(AttackStyle.RANGED));
-		assertEquals(22, info.max(AttackStyle.SPECIAL));
+		// GIVEN Scurrius's max hits, one per style plus Rockfall
+		String[] maxHits = {SCURRIUS_MELEE + " (Melee)", SCURRIUS_MAGIC + " (Magic)", SCURRIUS_RANGED + " (Ranged)",
+			SCURRIUS_ROCKFALL + " (Rockfall)"};
+
+		// WHEN parsing them
+		MonsterInfo info = parse("Magic", maxHits);
+
+		// THEN each style has its max and Rockfall is the special
+		assertEquals(SCURRIUS_MELEE, info.max(AttackStyle.MELEE));
+		assertEquals(SCURRIUS_MAGIC, info.max(AttackStyle.MAGIC));
+		assertEquals(SCURRIUS_RANGED, info.max(AttackStyle.RANGED));
+		assertEquals(SCURRIUS_ROCKFALL, info.max(AttackStyle.SPECIAL));
 		assertEquals("Rockfall", info.getSpecialName());
 	}
 
 	@Test
 	public void unlabelledUsesAttackStyle()
 	{
-		MonsterInfo info = parse("Slash", "36");
-		assertEquals(36, info.max(AttackStyle.MELEE));
+		// GIVEN an unlabelled max hit on a slash attacker
+		String maxHit = String.valueOf(SLASHER_MAX);
+
+		// WHEN parsing it
+		MonsterInfo info = parse("Slash", maxHit);
+
+		// THEN it is a melee max only
+		assertEquals(SLASHER_MAX, info.max(AttackStyle.MELEE));
 		assertFalse(info.has(AttackStyle.MAGIC));
 	}
 
 	@Test
 	public void specialAttackLabel()
 	{
-		MonsterInfo info = parse("Slash", "30 (magic)", "46 (melee)", "49 (special attack)");
-		assertEquals(46, info.max(AttackStyle.MELEE));
-		assertEquals(30, info.max(AttackStyle.MAGIC));
-		assertEquals(49, info.max(AttackStyle.SPECIAL));
+		// GIVEN K'ril's max hits, including "special attack"
+		String[] maxHits = {KRIL_MAGIC + " (magic)", KRIL_MELEE + " (melee)", KRIL_SPECIAL + " (special attack)"};
+
+		// WHEN parsing them
+		MonsterInfo info = parse("Slash", maxHits);
+
+		// THEN the special is named plainly "Special"
+		assertEquals(KRIL_MELEE, info.max(AttackStyle.MELEE));
+		assertEquals(KRIL_MAGIC, info.max(AttackStyle.MAGIC));
+		assertEquals(KRIL_SPECIAL, info.max(AttackStyle.SPECIAL));
 		assertEquals("Special", info.getSpecialName());
 	}
 
 	@Test
 	public void multipliersSumsAndRanges()
 	{
-		assertEquals(14, parse(null, "7x2 (Magic)").max(AttackStyle.MAGIC));
-		assertEquals(13, parse("Crush", "7+6").max(AttackStyle.MELEE));
-		assertEquals(60, parse(null, "50/60 (Melee)").max(AttackStyle.MELEE));
-		assertEquals(37, parse(null, "30-37 (Melee)").max(AttackStyle.MELEE));
-		assertEquals(50, parse(null, "50+ (Dragonfire)").max(AttackStyle.SPECIAL));
+		// GIVEN max hits written as a multiplier, a sum, a choice, a range and a minimum
+		// WHEN parsing each
+		int multiplier = parse(null, MULTI_HIT + "x" + MULTI_COUNT + " (Magic)").max(AttackStyle.MAGIC);
+		int sum = parse("Crush", MULTI_HIT + "+" + SUM_SECOND).max(AttackStyle.MELEE);
+		int choice = parse(null, CHOICE_LOW + "/" + CHOICE_HIGH + " (Melee)").max(AttackStyle.MELEE);
+		int range = parse(null, RANGE_LOW + "-" + RANGE_HIGH + " (Melee)").max(AttackStyle.MELEE);
+		int minimum = parse(null, DRAGONFIRE_MIN + "+ (Dragonfire)").max(AttackStyle.SPECIAL);
+
+		// THEN each gives the most it can hit
+		assertEquals(MULTI_HIT * MULTI_COUNT, multiplier);
+		assertEquals(MULTI_HIT + SUM_SECOND, sum);
+		assertEquals(CHOICE_HIGH, choice);
+		assertEquals(RANGE_HIGH, range);
+		assertEquals(DRAGONFIRE_MIN, minimum);
 	}
 
 	@Test
 	public void htmlListsAndRefs()
 	{
-		MonsterInfo info = parse(null, "<div class=\"plainlist \" >\n*31 (auto)\n*45 (special)\n</div>");
-		assertEquals(31, info.max(AttackStyle.MELEE));
-		assertEquals(45, info.max(AttackStyle.SPECIAL));
+		// GIVEN max hits in a wiki plainlist and split by <br/>
+		String plainlist = "<div class=\"plainlist \" >\n*" + AUTO_MAX + " (auto)\n*" + LIST_SPECIAL + " (special)\n</div>";
+		String breaks = BASE_MELEE + " <br/> " + WHIRLWINDS + " (whirlwinds) <br/> " + KNOCKBACK + " (knockback)";
 
-		info = parse("Melee", "22 <br/> 64 (whirlwinds) <br/> 30 (knockback)");
-		assertEquals(22, info.max(AttackStyle.MELEE));
-		assertEquals(64, info.max(AttackStyle.SPECIAL));
-		assertEquals("Whirlwinds", info.getSpecialName());
+		// WHEN parsing them
+		MonsterInfo list = parse(null, plainlist);
+		MonsterInfo split = parse("Melee", breaks);
+
+		// THEN every entry is read
+		assertEquals(AUTO_MAX, list.max(AttackStyle.MELEE));
+		assertEquals(LIST_SPECIAL, list.max(AttackStyle.SPECIAL));
+		assertEquals(BASE_MELEE, split.max(AttackStyle.MELEE));
+		assertEquals(WHIRLWINDS, split.max(AttackStyle.SPECIAL));
+		assertEquals("Whirlwinds", split.getSpecialName());
 	}
 
 	@Test
 	public void bothStylesInOneLabel()
 	{
-		MonsterInfo info = parse(null, "33 (Ranged and Magic)");
-		assertEquals(33, info.max(AttackStyle.RANGED));
-		assertEquals(33, info.max(AttackStyle.MAGIC));
+		// GIVEN one max hit labelled with two styles
+		String maxHit = BOTH_STYLES + " (Ranged and Magic)";
+
+		// WHEN parsing it
+		MonsterInfo info = parse(null, maxHit);
+
+		// THEN both styles get it and melee does not
+		assertEquals(BOTH_STYLES, info.max(AttackStyle.RANGED));
+		assertEquals(BOTH_STYLES, info.max(AttackStyle.MAGIC));
 		assertFalse(info.has(AttackStyle.MELEE));
 	}
 
 	@Test
 	public void magicalMeleeIsMagic()
 	{
-		MonsterInfo info = parse("Magical melee", "20");
-		assertEquals(20, info.max(AttackStyle.MAGIC));
+		// GIVEN a "Magical melee" attacker
+		String attackStyle = "Magical melee";
+
+		// WHEN parsing its max hit
+		MonsterInfo info = parse(attackStyle, String.valueOf(MAGICAL_MELEE));
+
+		// THEN it is magic, which Protect from Magic blocks
+		assertEquals(MAGICAL_MELEE, info.max(AttackStyle.MAGIC));
 		assertFalse(info.has(AttackStyle.MELEE));
 	}
 
 	@Test
 	public void skipsGearConditionalMaxes()
 	{
-		MonsterInfo spectre = parse("Magic", "14", "44 (without Nose peg)");
-		assertEquals(14, spectre.max(AttackStyle.MAGIC));
+		// GIVEN max hits that only apply with or without some gear
+		// WHEN parsing them
+		MonsterInfo spectre = parse("Magic", String.valueOf(SPECTRE_MAGIC), SPECTRE_UNPROTECTED + " (without Nose peg)");
+		MonsterInfo shielded = parse(null, SHIELDED + " (with anti-dragon shield)");
+		MonsterInfo boots = parse("Melee", BOOTLESS + " (Ranged/Melee; without insulated boots)");
+
+		// THEN those maxes are ignored
+		assertEquals(SPECTRE_MAGIC, spectre.max(AttackStyle.MAGIC));
 		assertFalse(spectre.has(AttackStyle.SPECIAL));
-		assertFalse(parse(null, "60 (with anti-dragon shield)").has(AttackStyle.SPECIAL));
-		assertTrue(parse("Melee", "20 (Ranged/Melee; without insulated boots)").getMaxHits().isEmpty());
+		assertFalse(shielded.has(AttackStyle.SPECIAL));
+		assertTrue(boots.getMaxHits().isEmpty());
 	}
 
 	@Test
 	public void skipsNonAttacks()
 	{
-		assertTrue(parse(null, "0 (Does not attack)").getMaxHits().isEmpty());
-		assertTrue(parse(null, "Varies").getMaxHits().isEmpty());
-		assertTrue(parse(null, "N/A").getMaxHits().isEmpty());
+		// GIVEN max hits that are not numbers to alert on
+		// WHEN parsing them
+		MonsterInfo passive = parse(null, "0 (Does not attack)");
+		MonsterInfo varies = parse(null, "Varies");
+		MonsterInfo none = parse(null, "N/A");
+
+		// THEN nothing is recorded
+		assertTrue(passive.getMaxHits().isEmpty());
+		assertTrue(varies.getMaxHits().isEmpty());
+		assertTrue(none.getMaxHits().isEmpty());
 	}
 
 	@Test
 	public void responseMergesIdsAndRows()
 	{
+		// GIVEN a bucket response with solo Scurrius, two group Scurrius rows sharing an id
 		String json = "{\"bucket\":["
-			+ "{\"id\":[\"7222\"],\"max_hit\":[\"13 (Melee)\",\"8 (Magic)\",\"7 (Ranged)\",\"22 (Rockfall)\"],"
-			+ "\"name\":\"Scurrius\",\"attack_style\":[\"Magic\",\"Ranged\",\"Melee\"]},"
-			+ "{\"id\":[\"7221\"],\"max_hit\":[\"13 (Melee)\",\"14 (Magic)\",\"13 (Ranged)\",\"24 (Rockfall)\"],"
-			+ "\"name\":\"Scurrius\",\"attack_style\":[\"Magic\",\"Ranged\",\"Melee\"]},"
-			+ "{\"id\":[\"7221\"],\"max_hit\":[\"9 (Melee)\"],\"name\":\"Scurrius\",\"attack_style\":[\"Melee\"]},"
-			+ "{\"id\":[\"3028\",\"3029\"],\"max_hit\":[\"1\"],\"name\":\"Goblin\",\"attack_style\":[\"Crush\"]},"
-			+ "{\"id\":[\"9999\"],\"max_hit\":[\"N/A\"],\"name\":\"Nothing\",\"attack_style\":[\"None\"]}"
+			+ row(SCURRIUS_SOLO_ID, "Scurrius", "Magic", SCURRIUS_MELEE + " (Melee)", SCURRIUS_MAGIC + " (Magic)")
+			+ "," + row(SCURRIUS_GROUP_ID, "Scurrius", "Magic", SCURRIUS_MELEE + " (Melee)",
+			SCURRIUS_GROUP_MAGIC + " (Magic)", SCURRIUS_GROUP_RANGED + " (Ranged)",
+			SCURRIUS_GROUP_ROCKFALL + " (Rockfall)")
+			+ "," + row(SCURRIUS_GROUP_ID, "Scurrius", "Melee", SCURRIUS_ALT_MELEE + " (Melee)")
+			// AND a goblin listed under two ids, and a non-attacker
+			+ ",{\"id\":[\"" + GOBLIN_ID + "\",\"" + GOBLIN_ALT_ID + "\"],\"max_hit\":[\"" + GOBLIN_MAX
+			+ "\"],\"name\":\"Goblin\",\"attack_style\":[\"Crush\"]}"
+			+ "," + row(NON_ATTACKER_ID, "Nothing", "None", "N/A")
 			+ "]}";
+
+		// WHEN parsing it
 		Map<Integer, MonsterInfo> out = WikiMonsterParser.parseResponse(new Gson().fromJson(json, JsonObject.class));
 
-		MonsterInfo solo = out.get(7222);
-		assertNotNull(solo);
-		assertEquals(8, solo.max(AttackStyle.MAGIC));
-		MonsterInfo group = out.get(7221);
-		assertEquals("higher value wins when an id is listed twice", 13, group.max(AttackStyle.MELEE));
-		assertEquals(14, group.max(AttackStyle.MAGIC));
-		assertEquals(1, out.get(3029).max(AttackStyle.MELEE));
-		assertNull(out.get(9999));
+		// THEN each id has its max hits
+		assertNotNull(out.get(SCURRIUS_SOLO_ID));
+		assertEquals(SCURRIUS_MAGIC, out.get(SCURRIUS_SOLO_ID).max(AttackStyle.MAGIC));
+		// AND the higher value wins for an id listed twice
+		assertEquals(SCURRIUS_MELEE, out.get(SCURRIUS_GROUP_ID).max(AttackStyle.MELEE));
+		assertEquals(SCURRIUS_GROUP_MAGIC, out.get(SCURRIUS_GROUP_ID).max(AttackStyle.MAGIC));
+		// AND every listed id is covered, but a non-attacker is not
+		assertEquals(GOBLIN_MAX, out.get(GOBLIN_ALT_ID).max(AttackStyle.MELEE));
+		assertNull(out.get(NON_ATTACKER_ID));
 	}
 }
