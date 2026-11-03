@@ -74,8 +74,12 @@ Message placeholders: `%USERNAME%` `%SOURCE%` `%MAXHIT%` `%DAMAGE%` `%HP%` (HP b
 ./gradlew --init-script config/checkstyle/checkstyle.gradle checkstyleMain checkstyleTest   # RuneLite code style
 ```
 
-Optional, when shipping an update anyway: refresh the attack style snapshot from the current RuneLite API.
+Optional, when shipping an update anyway: refresh the attack style snapshot from the latest RuneLite release.
 
 ```sh
-python scripts/generate_attack_styles.py path/to/runelite-api-<version>.jar
+./gradlew build --refresh-dependencies     # download the latest RuneLite release into the Gradle cache
+python scripts/generate_attack_styles.py   # regenerate attack_styles.txt from its runelite-api jar
 ```
+
+The script uses the newest `runelite-api-<version>.jar` in the Gradle cache
+(`~/.gradle/caches/modules-2/files-2.1/net.runelite/runelite-api/`), or a jar path you pass it.

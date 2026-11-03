@@ -11,8 +11,12 @@ anyway, to pick up attacks added to the game since the last snapshot. Ids missin
 snapshot fall back to the NPC's wiki attack styles.
 
 Usage:
-    python scripts/generate_attack_styles.py path/to/runelite-api-<version>.jar
+    ./gradlew build --refresh-dependencies   # download the latest RuneLite release
+    python scripts/generate_attack_styles.py [path/to/runelite-api-<version>.jar]
+
+Without a path, uses the newest runelite-api jar in the Gradle cache.
 """
+import os
 import re
 import subprocess
 import sys
@@ -51,8 +55,23 @@ def tag(name, rules):
     return None
 
 
+def version_key(path):
+    version = path.parent.parent.name
+    return [int(p) if p.isdigit() else 0 for p in re.split(r"[.-]", version)]
+
+
+def find_jar():
+    gradle_home = Path(os.environ.get("GRADLE_USER_HOME", Path.home() / ".gradle"))
+    cache = gradle_home / "caches/modules-2/files-2.1/net.runelite/runelite-api"
+    jars = [j for j in cache.glob("*/*/runelite-api-*.jar") if "sources" not in j.name]
+    if not jars:
+        sys.exit(f"No runelite-api jar under {cache}; run ./gradlew build first")
+    return str(max(jars, key=version_key))
+
+
 def main():
-    jar = sys.argv[1]
+    jar = sys.argv[1] if len(sys.argv) > 1 else find_jar()
+    print(f"Using {jar}")
     anims = {}
     for name, value in constants(jar, "net.runelite.api.gameval.AnimationID"):
         if SKIP.search(name) or not ATTACK.search(name):
