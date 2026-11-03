@@ -6,7 +6,7 @@ import lombok.RequiredArgsConstructor;
 /** Where the alert sound comes from. */
 @Getter
 @RequiredArgsConstructor
-enum SoundType
+public enum SoundType
 {
 	CHANCED_SOUND("Chanced sound"),
 	GAME_SOUND("Game sound"),

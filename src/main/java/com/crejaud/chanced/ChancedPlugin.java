@@ -661,6 +661,7 @@ public class ChancedPlugin extends Plugin
 	private void playSound()
 	{
 		SoundType type = config.soundType();
+		log.debug("Playing the {} sound at {}%", type, config.soundVolume());
 		if (type == SoundType.GAME_SOUND)
 		{
 			playGameSound();
@@ -679,6 +680,7 @@ public class ChancedPlugin extends Plugin
 				{
 					audioPlayer.play(ChancedPlugin.class, ChancedConfig.DEFAULT_SOUND_RESOURCE, gain);
 				}
+				log.debug("Started the {} sound at {} dB", type, gain);
 			}
 			catch (IOException | UnsupportedAudioFileException | LineUnavailableException | RuntimeException e)
 			{
@@ -714,6 +716,7 @@ public class ChancedPlugin extends Plugin
 
 	private void playGameSound()
 	{
+		log.debug("Playing game sound {} at volume {}", config.soundId(), soundVolume(config.soundVolume()));
 		client.playSoundEffect(config.soundId(), soundVolume(config.soundVolume()));
 	}
 

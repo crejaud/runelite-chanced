@@ -73,6 +73,8 @@
   A trivial one-assert test may carry `// no-gherkin` above its `@Test` instead.
 - **No magic numbers**, in main or test code: every number except -1, 0 and 1 is a named constant. Checkstyle's
   `MagicNumber` rule in `config/checkstyle/checkstyle.xml` enforces it in CI.
+- **Enums used in the config interface must be `public`.** RuneLite builds the config as a proxy in another module;
+  a package-private enum throws `IllegalAccessError` on the client thread, and the setting silently does nothing.
 
 ## Testing
 
