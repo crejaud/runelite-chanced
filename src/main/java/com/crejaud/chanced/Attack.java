@@ -8,16 +8,13 @@ import lombok.Value;
 @Builder
 class Attack
 {
-	/** Display name of the attacker or hazard. */
+	/** Display name of the attacker. */
 	String source;
 	AttackStyle style;
 	/** Max hit for {@link #style}, before prayer. */
 	int max;
 	/** Whether the correct protection prayer was up for this attack. */
 	boolean prayed;
-	/** Percent of the max that passes through a correct protection prayer (NPCs only). */
-	@Builder.Default
-	int passThroughPercent = 0;
 	/** The attacker's typeless/special max, or -1 when it has none. */
 	@Builder.Default
 	int specialMax = -1;

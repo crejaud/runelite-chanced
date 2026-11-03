@@ -23,6 +23,11 @@ class PvpEstimator
 	private static final int PRAYER_BONUS = 123;
 	/** Ice Barrage, the biggest common PvP spell base. */
 	private static final int MAGIC_BASE = 30;
+	/** Rings and ammo are not visible on other players: assume a berserker ring and dragon bolts. */
+	static final int RING_STRENGTH = 8;
+	static final int AMMO_STRENGTH = 122;
+	/** Room for special attacks above the normal max. */
+	static final int SPEC_MARGIN_PERCENT = 25;
 
 	private final ItemManager itemManager;
 
@@ -93,7 +98,12 @@ class PvpEstimator
 		return AttackStyle.MELEE;
 	}
 
-	/** Estimated max hit for a style, with the spec margin added. */
+	/** Estimated max hit for a style, with a margin for special attacks. */
+	static int maxHit(Gear gear, AttackStyle style)
+	{
+		return maxHit(gear, style, RING_STRENGTH, AMMO_STRENGTH, SPEC_MARGIN_PERCENT);
+	}
+
 	static int maxHit(Gear gear, AttackStyle style, int ringStr, int ammoRstr, int specMarginPercent)
 	{
 		int max;

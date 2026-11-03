@@ -27,14 +27,13 @@ flowchart TD
     E -- Nothing seen --> H{Nearest NPC attacking you<br/>has a special on the wiki?}
     H -- Yes --> I[Use the special's max<br/>e.g. Rockfall]
     H -- No --> J[Worst of its normal styles]
-    E -- Configured hazard --> K[Use the hazard's max]
     F & G & J --> L{Correct protection prayer up?}
     L -- "No" --> M[Full wiki max hit]
     L -- "Yes, NPC" --> N{Did the hit get through anyway?}
-    N -- No --> O[Max = pass-through %, default 0]
+    N -- No --> O[Blocked: max 0]
     N -- Yes --> P[It was a special, e.g. prayer smash:<br/>use the special's max]
     L -- "Yes, player" --> Q[Estimated max x 0.6]
-    I & K & M & O & P & Q --> R[Sum the max of every attack this tick<br/>plus damage-over-time at the damage dealt]
+    I & M & O & P & Q --> R[Sum the max of every attack this tick<br/>plus damage-over-time at the damage dealt]
     R --> S{Sum >= HP at the hit?}
     S -- Yes --> T[Chanced! Chat message + Discord]
     S -- No --> X
@@ -45,24 +44,26 @@ flowchart TD
 - **Attack styles** come from RuneLite's named animation and projectile IDs (`scripts/generate_attack_styles.py`).
 - **Several hits on one tick** are added together. Two hitsplats from one attack count its max once.
 - **Players** (Wilderness, PvP and Deadman worlds, or anywhere with *Outside PvP areas*): the max hit is a worst-case
-  estimate from their visible gear with 99s, boosting potions, Piety/Rigour, an assumed ring and ammo, plus the spec
-  margin. Shown as `~`.
+  estimate from their visible gear with 99s, boosting potions, Piety/Rigour, a berserker ring, dragon bolts and 25%
+  for special attacks. Shown as `~`.
 
 ## Settings
 
 | Setting | What it does |
 |---|---|
-| Chat message › Chat message | Game chat message on a chance |
+| Chat message › Enabled | Game chat message on a chance |
 | Chat message › Message | Chat message template |
 | Chat message › Text color | Color of the chat message |
-| Discord › Webhook URL | Discord webhook(s), one per line. Blank turns Discord off |
+| Chat message › Send test | Shows a test chat message (Scurrius) |
+| Discord › Enabled | Post chances to Discord (off by default) |
+| Discord › Webhook URL | Discord webhook(s), one per line |
 | Discord › Message | Discord message template |
 | Discord › Send screenshot | Attach a screenshot to the Discord embed |
-| Player attacks / Outside PvP areas / Spec margin / Assumed ammo and ring | PvP estimate |
-| Unknown source HP | Alert on hits with no known source at or below this HP (0 = off) |
-| Style overrides | `npcId:animationId:style` |
-| Prayer pass-through | `npcId:style:percent` |
-| Hazards | `graphic:id:max`, `projectile:id:max`, `region:id:max` |
+| Discord › Send test | Posts a test message (Scurrius) to the webhook |
+| PvP › Player attacks | Alert on chances from other players |
+| PvP › Outside PvP areas | Also check players outside the Wilderness, PvP and Deadman worlds |
+
+The *Send test* checkboxes untick themselves after sending.
 
 Message placeholders: `%USERNAME%` `%SOURCE%` `%MAXHIT%` `%DAMAGE%` `%HP%` (HP before the hit) `%HPLEFT%` `%STYLE%`
 `%PRAYER%` `%WORLD%`.
@@ -70,7 +71,7 @@ Message placeholders: `%USERNAME%` `%SOURCE%` `%MAXHIT%` `%DAMAGE%` `%HP%` (HP b
 ## Network use
 
 - OSRS Wiki API: one download of monster max hits per day.
-- Your Discord webhook, only when you set one.
+- Your Discord webhook, only when Discord is enabled.
 
 ## Development
 

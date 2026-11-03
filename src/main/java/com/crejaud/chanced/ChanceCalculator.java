@@ -17,12 +17,11 @@ final class ChanceCalculator
 	}
 
 	/**
-	 * @param hits                every damage hitsplat on the player this tick
-	 * @param hpAfter             hitpoints after the tick
-	 * @param unknownHpThreshold  alert on unexplained hits at or below this HP; 0 turns it off
+	 * @param hits    every damage hitsplat on the player this tick
+	 * @param hpAfter hitpoints after the tick
 	 * @return the verdict, or null when the tick was not a chance
 	 */
-	static Verdict evaluate(List<Hit> hits, int hpAfter, int unknownHpThreshold)
+	static Verdict evaluate(List<Hit> hits, int hpAfter)
 	{
 		if (hits.isEmpty() || hpAfter <= 0)
 		{
@@ -31,7 +30,6 @@ final class ChanceCalculator
 
 		int damage = 0;
 		int potential = 0;
-		int unexplained = 0;
 		Map<Attack, Integer> byAttack = new IdentityHashMap<>();
 		for (Hit hit : hits)
 		{
@@ -42,11 +40,8 @@ final class ChanceCalculator
 			}
 			else
 			{
+				// Damage over time and hits with no known source count at the damage dealt.
 				potential += hit.getDamage();
-				if (!hit.isOverTime())
-				{
-					unexplained++;
-				}
 			}
 		}
 		int hpBefore = hpAfter + damage;
@@ -70,17 +65,11 @@ final class ChanceCalculator
 			}
 		}
 
-		if (worst != null)
+		if (worst == null || potential < hpBefore)
 		{
-			return potential >= hpBefore
-				? new Verdict(worst.getSource(), worstStyle, potential, damage, hpBefore, hpAfter, estimate)
-				: null;
+			return null;
 		}
-		if (unexplained > 0 && unknownHpThreshold > 0 && hpBefore <= unknownHpThreshold)
-		{
-			return new Verdict("Unknown", "Unknown", -1, damage, hpBefore, hpAfter, false);
-		}
-		return null;
+		return new Verdict(worst.getSource(), worstStyle, potential, damage, hpBefore, hpAfter, estimate);
 	}
 
 	/** What one attack could have hit, given it actually dealt {@code dealt}. */
@@ -96,12 +85,9 @@ final class ChanceCalculator
 		}
 		else if (attack.getStyle().isNormal() && attack.isPrayed())
 		{
-			max = max * attack.getPassThroughPercent() / 100;
-			if (dealt > max)
-			{
-				// It went through the prayer: a special (prayer smash), or the prayer came too late.
-				max = attack.getSpecialMax() > 0 ? attack.getSpecialMax() : attack.getMax();
-			}
+			// The right prayer blocks it fully, unless it went through anyway: a special
+			// (prayer smash), or the prayer came too late.
+			max = dealt > 0 ? (attack.getSpecialMax() > 0 ? attack.getSpecialMax() : attack.getMax()) : 0;
 		}
 		return Math.max(max, dealt);
 	}
@@ -109,7 +95,7 @@ final class ChanceCalculator
 	private static String styleShown(Attack attack, int dealt)
 	{
 		if (!attack.isPlayer() && attack.getStyle().isNormal() && attack.isPrayed() && attack.getSpecialMax() > 0
-			&& dealt > attack.getMax() * attack.getPassThroughPercent() / 100)
+			&& dealt > 0)
 		{
 			return attack.getSpecialName();
 		}

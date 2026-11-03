@@ -24,7 +24,7 @@ public class ChanceCalculatorTest
 	@Test
 	public void maxAtOrAboveHpAndSurvived()
 	{
-		Verdict v = ChanceCalculator.evaluate(one(1, npc("Goblin", AttackStyle.MELEE, 2, false)), 1, 0);
+		Verdict v = ChanceCalculator.evaluate(one(1, npc("Goblin", AttackStyle.MELEE, 2, false)), 1);
 		assertNotNull(v);
 		assertEquals("Goblin", v.getSource());
 		assertEquals(2, v.getMaxHit());
@@ -37,26 +37,26 @@ public class ChanceCalculatorTest
 	@Test
 	public void hpAboveMaxIsNotAChance()
 	{
-		assertNull(ChanceCalculator.evaluate(one(1, npc("Goblin", AttackStyle.MELEE, 2, false)), 5, 0));
+		assertNull(ChanceCalculator.evaluate(one(1, npc("Goblin", AttackStyle.MELEE, 2, false)), 5));
 	}
 
 	@Test
 	public void eatingOnTheTickCounts()
 	{
 		// Hit for 1 at 2 HP, ate a shark the same tick: HP after is 21, so HP at the hit counts as 22.
-		assertNull(ChanceCalculator.evaluate(one(1, npc("Goblin", AttackStyle.MELEE, 2, false)), 21, 0));
+		assertNull(ChanceCalculator.evaluate(one(1, npc("Goblin", AttackStyle.MELEE, 2, false)), 21));
 	}
 
 	@Test
 	public void deathIsNotAChance()
 	{
-		assertNull(ChanceCalculator.evaluate(one(5, npc("Goblin", AttackStyle.MELEE, 5, false)), 0, 0));
+		assertNull(ChanceCalculator.evaluate(one(5, npc("Goblin", AttackStyle.MELEE, 5, false)), 0));
 	}
 
 	@Test
 	public void scurriusMagicWrongPrayer()
 	{
-		Verdict v = ChanceCalculator.evaluate(one(0, npc("Scurrius", AttackStyle.MAGIC, 8, false)), 8, 0);
+		Verdict v = ChanceCalculator.evaluate(one(0, npc("Scurrius", AttackStyle.MAGIC, 8, false)), 8);
 		assertNotNull(v);
 		assertEquals(8, v.getMaxHit());
 		assertEquals("Magic", v.getStyle());
@@ -65,16 +65,7 @@ public class ChanceCalculatorTest
 	@Test
 	public void correctPrayerBlocksNpc()
 	{
-		assertNull(ChanceCalculator.evaluate(one(0, npc("Scurrius", AttackStyle.MAGIC, 8, true)), 8, 0));
-	}
-
-	@Test
-	public void passThroughPercent()
-	{
-		Attack attack = Attack.builder().source("Boss").style(AttackStyle.MAGIC).max(40).prayed(true)
-			.passThroughPercent(50).build();
-		assertNotNull(ChanceCalculator.evaluate(one(0, attack), 20, 0));
-		assertNull(ChanceCalculator.evaluate(one(0, attack), 21, 0));
+		assertNull(ChanceCalculator.evaluate(one(0, npc("Scurrius", AttackStyle.MAGIC, 8, true)), 8));
 	}
 
 	@Test
@@ -82,7 +73,7 @@ public class ChanceCalculatorTest
 	{
 		Attack smash = Attack.builder().source("K'ril Tsutsaroth").style(AttackStyle.MELEE).max(46).prayed(true)
 			.specialMax(49).specialName("Prayer smash").build();
-		Verdict v = ChanceCalculator.evaluate(one(30, smash), 19, 0);
+		Verdict v = ChanceCalculator.evaluate(one(30, smash), 19);
 		assertNotNull(v);
 		assertEquals(49, v.getMaxHit());
 		assertEquals("Prayer smash", v.getStyle());
@@ -93,7 +84,7 @@ public class ChanceCalculatorTest
 	{
 		Attack rockfall = Attack.builder().source("Scurrius").style(AttackStyle.SPECIAL).max(22)
 			.specialMax(22).specialName("Rockfall").build();
-		Verdict v = ChanceCalculator.evaluate(one(10, rockfall), 5, 0);
+		Verdict v = ChanceCalculator.evaluate(one(10, rockfall), 5);
 		assertNotNull(v);
 		assertEquals("Rockfall", v.getStyle());
 		assertEquals(22, v.getMaxHit());
@@ -106,7 +97,7 @@ public class ChanceCalculatorTest
 		Attack b = npc("Bat", AttackStyle.MELEE, 4, false);
 		List<Hit> hits = Arrays.asList(new Hit(1, false, a), new Hit(1, false, b), new Hit(2, true, null));
 		// HP before = 6 + 4 = 10; potential = 5 + 4 + 2 (poison) = 11.
-		Verdict v = ChanceCalculator.evaluate(hits, 6, 0);
+		Verdict v = ChanceCalculator.evaluate(hits, 6);
 		assertNotNull(v);
 		assertEquals(11, v.getMaxHit());
 		assertEquals("Rat", v.getSource());
@@ -117,7 +108,7 @@ public class ChanceCalculatorTest
 	{
 		Attack a = npc("Twin", AttackStyle.MAGIC, 14, false);
 		List<Hit> hits = Arrays.asList(new Hit(3, false, a), new Hit(3, false, a));
-		Verdict v = ChanceCalculator.evaluate(hits, 8, 0);
+		Verdict v = ChanceCalculator.evaluate(hits, 8);
 		assertNotNull(v);
 		assertEquals(14, v.getMaxHit());
 	}
@@ -127,28 +118,22 @@ public class ChanceCalculatorTest
 	{
 		Attack pker = Attack.builder().source("Pker").style(AttackStyle.MAGIC).max(50).prayed(true).player(true)
 			.build();
-		Verdict v = ChanceCalculator.evaluate(one(10, pker), 20, 0);
+		Verdict v = ChanceCalculator.evaluate(one(10, pker), 20);
 		assertNotNull(v);
 		assertEquals(30, v.getMaxHit());
 		assertTrue(v.isEstimate());
-		assertNull(ChanceCalculator.evaluate(one(10, pker), 21, 0));
+		assertNull(ChanceCalculator.evaluate(one(10, pker), 21));
 	}
 
 	@Test
-	public void unknownSourceThreshold()
+	public void unexplainedHitAloneIsNotAChance()
 	{
-		List<Hit> hits = one(3, null);
-		assertNull(ChanceCalculator.evaluate(hits, 2, 0));
-		Verdict v = ChanceCalculator.evaluate(hits, 2, 5);
-		assertNotNull(v);
-		assertEquals("Unknown", v.getSource());
-		assertEquals(-1, v.getMaxHit());
-		assertNull(ChanceCalculator.evaluate(hits, 3, 5));
+		assertNull(ChanceCalculator.evaluate(one(3, null), 2));
 	}
 
 	@Test
 	public void damageOverTimeAloneIsNotAChance()
 	{
-		assertNull(ChanceCalculator.evaluate(Collections.singletonList(new Hit(4, true, null)), 1, 99));
+		assertNull(ChanceCalculator.evaluate(Collections.singletonList(new Hit(4, true, null)), 1));
 	}
 }

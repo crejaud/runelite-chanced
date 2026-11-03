@@ -5,14 +5,14 @@ import net.runelite.client.config.Config;
 import net.runelite.client.config.ConfigGroup;
 import net.runelite.client.config.ConfigItem;
 import net.runelite.client.config.ConfigSection;
-import net.runelite.client.config.Range;
-import net.runelite.client.config.Units;
 
 @ConfigGroup(ChancedConfig.GROUP)
 public interface ChancedConfig extends Config
 {
 	String GROUP = "chanced";
 	String WEBHOOK_WARNING = "This feature submits your IP address to a 3rd-party server not controlled or verified by RuneLite developers";
+	String TEST_CHAT = "testChat";
+	String TEST_DISCORD = "testDiscord";
 
 	String PLACEHOLDERS = "Placeholders: %USERNAME% %SOURCE% %MAXHIT% %DAMAGE% %HP% (before the hit) %HPLEFT% "
 		+ "%STYLE% %PRAYER% %WORLD%";
@@ -30,12 +30,9 @@ public interface ChancedConfig extends Config
 	@ConfigSection(name = "PvP", description = "Chances from other players", position = 20)
 	String pvpSection = "pvp";
 
-	@ConfigSection(name = "Advanced", description = "Overrides and hazards", position = 30, closedByDefault = true)
-	String advancedSection = "advanced";
-
 	@ConfigItem(
 		keyName = "chatMessage",
-		name = "Chat message",
+		name = "Enabled",
 		description = "Show a game chat message when you get chanced",
 		section = chatSection,
 		position = 1
@@ -70,12 +67,36 @@ public interface ChancedConfig extends Config
 	}
 
 	@ConfigItem(
-		keyName = "webhookUrl",
-		name = "Webhook URL",
-		description = "Discord webhook URL(s), one per line. Leave blank to turn Discord off.",
+		keyName = TEST_CHAT,
+		name = "Send test",
+		description = "Tick to show a test chat message (Scurrius); it unticks itself",
+		section = chatSection,
+		position = 4
+	)
+	default boolean testChat()
+	{
+		return false;
+	}
+
+	@ConfigItem(
+		keyName = "discordEnabled",
+		name = "Enabled",
+		description = "Post chances to your Discord webhook",
 		warning = WEBHOOK_WARNING,
 		section = discordSection,
 		position = 11
+	)
+	default boolean discordEnabled()
+	{
+		return false;
+	}
+
+	@ConfigItem(
+		keyName = "webhookUrl",
+		name = "Webhook URL",
+		description = "Discord webhook URL(s), one per line",
+		section = discordSection,
+		position = 12
 	)
 	default String webhookUrl()
 	{
@@ -87,7 +108,7 @@ public interface ChancedConfig extends Config
 		name = "Message",
 		description = "Discord message text. " + PLACEHOLDERS,
 		section = discordSection,
-		position = 12
+		position = 13
 	)
 	default String discordTemplate()
 	{
@@ -99,11 +120,23 @@ public interface ChancedConfig extends Config
 		name = "Send screenshot",
 		description = "Attach a screenshot of the game to the Discord message",
 		section = discordSection,
-		position = 13
+		position = 14
 	)
 	default boolean sendScreenshot()
 	{
 		return true;
+	}
+
+	@ConfigItem(
+		keyName = TEST_DISCORD,
+		name = "Send test",
+		description = "Tick to post a test message (Scurrius) to the webhook; it unticks itself",
+		section = discordSection,
+		position = 15
+	)
+	default boolean testDiscord()
+	{
+		return false;
 	}
 
 	@ConfigItem(
@@ -128,91 +161,5 @@ public interface ChancedConfig extends Config
 	default boolean pvpAnywhere()
 	{
 		return false;
-	}
-
-	@Range(max = 100)
-	@Units(Units.PERCENT)
-	@ConfigItem(
-		keyName = "pvpSpecMargin",
-		name = "Spec margin",
-		description = "Added to a player's estimated max hit to cover special attacks",
-		section = pvpSection,
-		position = 23
-	)
-	default int pvpSpecMargin()
-	{
-		return 25;
-	}
-
-	@ConfigItem(
-		keyName = "pvpAssumedAmmo",
-		name = "Assumed ammo strength",
-		description = "Ranged strength assumed for ammo, which other players' gear does not show",
-		section = pvpSection,
-		position = 24
-	)
-	default int pvpAssumedAmmo()
-	{
-		return 122;
-	}
-
-	@ConfigItem(
-		keyName = "pvpAssumedRing",
-		name = "Assumed ring strength",
-		description = "Melee strength assumed for a ring, which other players' gear does not show",
-		section = pvpSection,
-		position = 25
-	)
-	default int pvpAssumedRing()
-	{
-		return 8;
-	}
-
-	@ConfigItem(
-		keyName = "unknownHpThreshold",
-		name = "Unknown source HP",
-		description = "Alert on hits with no known source when your HP was at or below this. 0 turns it off.",
-		section = advancedSection,
-		position = 31
-	)
-	default int unknownHpThreshold()
-	{
-		return 0;
-	}
-
-	@ConfigItem(
-		keyName = "styleOverrides",
-		name = "Style overrides",
-		description = "One per line: npcId:animationId:style (melee, ranged, magic or special)",
-		section = advancedSection,
-		position = 32
-	)
-	default String styleOverrides()
-	{
-		return "";
-	}
-
-	@ConfigItem(
-		keyName = "prayerPassThrough",
-		name = "Prayer pass-through",
-		description = "One per line: npcId:style:percent, the share of a max hit that gets through the right protection prayer",
-		section = advancedSection,
-		position = 33
-	)
-	default String prayerPassThrough()
-	{
-		return "";
-	}
-
-	@ConfigItem(
-		keyName = "hazards",
-		name = "Hazards",
-		description = "One per line: graphic:id:max, projectile:id:max or region:id:max",
-		section = advancedSection,
-		position = 34
-	)
-	default String hazards()
-	{
-		return "";
 	}
 }

@@ -13,9 +13,9 @@ import java.util.Set;
 import javax.inject.Inject;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Actor;
-import net.runelite.api.ActorSpotAnim;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
+import net.runelite.api.HitsplatID;
 import net.runelite.api.NPC;
 import net.runelite.api.Player;
 import net.runelite.api.Prayer;
@@ -26,10 +26,8 @@ import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.events.AnimationChanged;
 import net.runelite.api.events.CommandExecuted;
 import net.runelite.api.events.GameTick;
-import net.runelite.api.events.GraphicChanged;
 import net.runelite.api.events.HitsplatApplied;
 import net.runelite.api.events.ProjectileMoved;
-import net.runelite.api.HitsplatID;
 import net.runelite.api.gameval.VarbitID;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.chat.ChatMessageBuilder;
@@ -81,6 +79,9 @@ public class ChancedPlugin extends Plugin
 	private ChancedConfig config;
 
 	@Inject
+	private ConfigManager configManager;
+
+	@Inject
 	private ChatMessageManager chatMessageManager;
 
 	@Inject
@@ -92,24 +93,18 @@ public class ChancedPlugin extends Plugin
 	@Inject
 	private DiscordNotifier discord;
 
-	private Overrides overrides = Overrides.parse("", "", "");
-
-	/** An attack seen starting: an animation, a projectile or a hazard. */
+	/** An attack seen starting: an animation or a projectile. */
 	static final class Pending
 	{
 		Actor actor;
 		int startTick;
-		/** Projectile end cycle, or 0 for animations and hazards. */
+		/** Projectile end cycle, or 0 for animations. */
 		int endCycle;
 		boolean projectile;
 		/** Style the animation or projectile name implies; null when unknown. */
 		AttackStyle style;
-		/** Animation with no style in its name. */
-		boolean unknownStyle;
-		/** Max hit of a configured hazard, or -1. */
-		int hazardMax = -1;
 		/** Protection prayers up when the attack started. */
-		Set<AttackStyle> protectedAtStart;
+		Set<AttackStyle> protectedAtStart = EnumSet.noneOf(AttackStyle.class);
 		boolean consumed;
 	}
 
@@ -120,7 +115,6 @@ public class ChancedPlugin extends Plugin
 	@Override
 	protected void startUp() throws Exception
 	{
-		reloadOverrides();
 		loadMaxHits(false);
 	}
 
@@ -142,10 +136,46 @@ public class ChancedPlugin extends Plugin
 	@Subscribe
 	public void onConfigChanged(ConfigChanged event)
 	{
-		if (ChancedConfig.GROUP.equals(event.getGroup()))
+		if (!ChancedConfig.GROUP.equals(event.getGroup()) || !"true".equals(event.getNewValue()))
 		{
-			reloadOverrides();
+			return;
 		}
+		if (ChancedConfig.TEST_CHAT.equals(event.getKey()))
+		{
+			configManager.setConfiguration(ChancedConfig.GROUP, ChancedConfig.TEST_CHAT, false);
+			clientThread.invoke(() -> chat(testEvent().format(config.chatTemplate())));
+		}
+		else if (ChancedConfig.TEST_DISCORD.equals(event.getKey()))
+		{
+			configManager.setConfiguration(ChancedConfig.GROUP, ChancedConfig.TEST_DISCORD, false);
+			clientThread.invoke(this::sendTestDiscord);
+		}
+	}
+
+	private void sendTestDiscord()
+	{
+		String webhooks = config.webhookUrl();
+		if (!config.discordEnabled())
+		{
+			chat("Chanced: turn on Discord first.");
+			return;
+		}
+		if (webhooks == null || webhooks.trim().isEmpty())
+		{
+			chat("Chanced: set a Discord webhook URL first.");
+			return;
+		}
+		discord.send(testEvent(), config.discordTemplate(), webhooks, config.sendScreenshot());
+		chat("Chanced: sent a test message to Discord.");
+	}
+
+	/** A made-up Scurrius chance for the test buttons. */
+	private ChancedEvent testEvent()
+	{
+		Player local = client.getLocalPlayer();
+		String name = local != null && local.getName() != null ? local.getName() : "Player";
+		return new ChancedEvent(name, "Scurrius", "Magic", prayerName(AttackStyle.MELEE), 8, 0, 8, 8,
+			client.getWorld(), false);
 	}
 
 	@Subscribe
@@ -167,27 +197,20 @@ public class ChancedPlugin extends Plugin
 		{
 			return;
 		}
-		int animation = actor.getAnimation();
 		Pending p = new Pending();
 		p.actor = actor;
 		p.startTick = client.getTickCount();
 		p.protectedAtStart = protectedStyles();
 		if (actor instanceof NPC)
 		{
-			AttackStyle override = overrides.style(((NPC) actor).getId(), animation);
-			AttackHint hint = AttackStyleTable.animation(animation);
-			if (override == null && hint == null)
+			AttackHint hint = AttackStyleTable.animation(actor.getAnimation());
+			if (hint == null)
 			{
 				return;
 			}
-			p.style = override != null ? override : hint.toStyle();
-			p.unknownStyle = p.style == null;
+			p.style = hint.toStyle();
 		}
-		else if (actor instanceof Player && actor.getInteracting() == local && pvpActive())
-		{
-			p.unknownStyle = true;
-		}
-		else
+		else if (!(actor instanceof Player && actor.getInteracting() == local && pvpActive()))
 		{
 			return;
 		}
@@ -199,18 +222,7 @@ public class ChancedPlugin extends Plugin
 	{
 		Projectile projectile = event.getProjectile();
 		Player local = client.getLocalPlayer();
-		if (local == null || projectiles.containsKey(projectile))
-		{
-			return;
-		}
-		Integer hazardMax = overrides.getProjectileHazards().get(projectile.getId());
-		boolean atMe = projectile.getTargetActor() == local;
-		if (!atMe && hazardMax != null)
-		{
-			WorldPoint target = projectile.getTargetPoint();
-			atMe = target != null && target.distanceTo(local.getWorldLocation()) <= 1;
-		}
-		if (!atMe)
+		if (local == null || projectile.getTargetActor() != local || projectiles.containsKey(projectile))
 		{
 			return;
 		}
@@ -220,32 +232,9 @@ public class ChancedPlugin extends Plugin
 		p.endCycle = projectile.getEndCycle();
 		p.projectile = true;
 		p.style = AttackStyleTable.projectile(projectile.getId());
-		p.hazardMax = hazardMax != null ? hazardMax : -1;
 		p.protectedAtStart = protectedStyles();
 		projectiles.put(projectile, p);
 		pending.add(p);
-	}
-
-	@Subscribe
-	public void onGraphicChanged(GraphicChanged event)
-	{
-		Player local = client.getLocalPlayer();
-		if (event.getActor() != local || local == null || overrides.getGraphicHazards().isEmpty())
-		{
-			return;
-		}
-		for (ActorSpotAnim spotAnim : local.getSpotAnims())
-		{
-			Integer max = overrides.getGraphicHazards().get(spotAnim.getId());
-			if (max != null)
-			{
-				Pending p = new Pending();
-				p.startTick = client.getTickCount();
-				p.hazardMax = max;
-				p.protectedAtStart = protectedStyles();
-				pending.add(p);
-			}
-		}
 	}
 
 	@Subscribe
@@ -285,8 +274,7 @@ public class ChancedPlugin extends Plugin
 			return;
 		}
 		int hpAfter = client.getBoostedSkillLevel(Skill.HITPOINTS);
-		List<Pending> candidates = candidates(tick, local);
-		Iterator<Pending> next = candidates.iterator();
+		Iterator<Pending> next = candidates(tick, local).iterator();
 
 		List<Hit> hits = new ArrayList<>();
 		Attack last = null;
@@ -321,10 +309,10 @@ public class ChancedPlugin extends Plugin
 			hits.add(new Hit(damage, false, attack));
 		}
 
-		Verdict verdict = ChanceCalculator.evaluate(hits, hpAfter, config.unknownHpThreshold());
+		Verdict verdict = ChanceCalculator.evaluate(hits, hpAfter);
 		if (verdict != null)
 		{
-			notify(ChancedEvent.of(verdict, local.getName() != null ? local.getName() : "You", prayerName(),
+			notify(ChancedEvent.of(verdict, local.getName() != null ? local.getName() : "Player", prayerName(),
 				client.getWorld()));
 		}
 	}
@@ -338,21 +326,13 @@ public class ChancedPlugin extends Plugin
 		List<Pending> others = new ArrayList<>();
 		for (Pending p : pending)
 		{
-			if (p.consumed)
+			if (p.consumed || p.actor == null)
 			{
 				continue;
 			}
 			if (p.projectile)
 			{
 				if (p.endCycle <= cycle + CYCLES_PER_TICK && p.endCycle >= cycle - 2 * CYCLES_PER_TICK)
-				{
-					landed.add(p);
-				}
-				continue;
-			}
-			if (p.actor == null)
-			{
-				if (p.startTick >= tick - 1)
 				{
 					landed.add(p);
 				}
@@ -388,10 +368,6 @@ public class ChancedPlugin extends Plugin
 	private void consume(Pending used, int tick)
 	{
 		used.consumed = true;
-		if (used.actor == null)
-		{
-			return;
-		}
 		for (Pending p : pending)
 		{
 			if (!p.consumed && p.actor == used.actor && (!p.projectile || used.projectile)
@@ -402,7 +378,7 @@ public class ChancedPlugin extends Plugin
 		}
 	}
 
-	/** No seen attack explains the hit: blame the nearest NPC attacking us, or a region hazard. */
+	/** No seen attack explains the hit: blame the nearest NPC attacking us. */
 	private Attack fallback(Player local)
 	{
 		NPC nearest = null;
@@ -420,31 +396,18 @@ public class ChancedPlugin extends Plugin
 				nearest = npc;
 			}
 		}
-		if (nearest != null)
+		if (nearest == null)
 		{
-			Pending p = new Pending();
-			p.actor = nearest;
-			p.protectedAtStart = protectedStyles();
-			Attack attack = toAttack(p, true);
-			if (attack != null)
-			{
-				return attack;
-			}
+			return null;
 		}
-		Integer regionMax = overrides.getRegionHazards().get(local.getWorldLocation().getRegionID());
-		if (regionMax != null)
-		{
-			return hazard(regionMax);
-		}
-		return null;
+		Pending p = new Pending();
+		p.actor = nearest;
+		p.protectedAtStart = protectedStyles();
+		return toAttack(p, true);
 	}
 
 	private Attack toAttack(Pending p, boolean unexplained)
 	{
-		if (p.hazardMax >= 0)
-		{
-			return hazard(p.hazardMax);
-		}
 		if (p.actor instanceof NPC)
 		{
 			return npcAttack((NPC) p.actor, p, unexplained);
@@ -463,19 +426,18 @@ public class ChancedPlugin extends Plugin
 		{
 			return null;
 		}
-		AttackStyle style = chooseStyle(info, p, unexplained, protectedStyles());
+		Set<AttackStyle> prayers = protectedStyles();
+		AttackStyle style = chooseStyle(info, p, unexplained, prayers);
 		if (style == null)
 		{
 			return null;
 		}
-		boolean prayed = style.isNormal()
-			&& (p.protectedAtStart.contains(style) || protectedStyles().contains(style));
+		boolean prayed = style.isNormal() && (p.protectedAtStart.contains(style) || prayers.contains(style));
 		return Attack.builder()
 			.source(npc.getName() != null ? npc.getName() : info.getName())
 			.style(style)
 			.max(info.max(style))
 			.prayed(prayed)
-			.passThroughPercent(overrides.passThrough(npc.getId(), style))
 			.specialMax(info.max(AttackStyle.SPECIAL))
 			.specialName(info.getSpecialName())
 			.build();
@@ -488,14 +450,7 @@ public class ChancedPlugin extends Plugin
 	static AttackStyle chooseStyle(MonsterInfo info, Pending p, boolean unexplained, Set<AttackStyle> prayers)
 	{
 		Set<AttackStyle> options = EnumSet.noneOf(AttackStyle.class);
-		if (unexplained)
-		{
-			if (info.has(AttackStyle.SPECIAL))
-			{
-				return AttackStyle.SPECIAL;
-			}
-		}
-		else if (p.style == AttackStyle.SPECIAL)
+		if (unexplained || p.style == AttackStyle.SPECIAL)
 		{
 			if (info.has(AttackStyle.SPECIAL))
 			{
@@ -552,24 +507,12 @@ public class ChancedPlugin extends Plugin
 	{
 		PvpEstimator.Gear gear = pvpEstimator.gear(player);
 		AttackStyle style = p.style != null && p.style.isNormal() ? p.style : PvpEstimator.weaponStyle(gear);
-		int max = PvpEstimator.maxHit(gear, style, config.pvpAssumedRing(), config.pvpAssumedAmmo(),
-			config.pvpSpecMargin());
 		return Attack.builder()
 			.source(player.getName() != null ? player.getName() : "A player")
 			.style(style)
-			.max(max)
+			.max(PvpEstimator.maxHit(gear, style))
 			.prayed(p.protectedAtStart.contains(style) || protectedStyles().contains(style))
 			.player(true)
-			.build();
-	}
-
-	private static Attack hazard(int max)
-	{
-		return Attack.builder()
-			.source("Hazard")
-			.style(AttackStyle.SPECIAL)
-			.max(max)
-			.specialName("Hazard")
 			.build();
 	}
 
@@ -629,7 +572,7 @@ public class ChancedPlugin extends Plugin
 			chat(event.format(config.chatTemplate()));
 		}
 		String webhooks = config.webhookUrl();
-		if (webhooks != null && !webhooks.trim().isEmpty())
+		if (config.discordEnabled() && webhooks != null && !webhooks.trim().isEmpty())
 		{
 			discord.send(event, config.discordTemplate(), webhooks, config.sendScreenshot());
 		}
@@ -643,11 +586,6 @@ public class ChancedPlugin extends Plugin
 				.append(config.chatColor(), message)
 				.build())
 			.build());
-	}
-
-	private void reloadOverrides()
-	{
-		overrides = Overrides.parse(config.styleOverrides(), config.prayerPassThrough(), config.hazards());
 	}
 
 	private void loadMaxHits(boolean force)

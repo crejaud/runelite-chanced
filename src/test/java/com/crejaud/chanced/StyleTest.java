@@ -1,13 +1,12 @@
 package com.crejaud.chanced;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import java.util.EnumSet;
 import java.util.Set;
 import org.junit.Test;
 
-public class StyleAndOverridesTest
+public class StyleTest
 {
 	private static MonsterInfo scurrius()
 	{
@@ -62,20 +61,6 @@ public class StyleAndOverridesTest
 		MonsterInfo goblin = new MonsterInfo("Goblin");
 		goblin.put(AttackStyle.MELEE, 1);
 		assertEquals(AttackStyle.MELEE, ChancedPlugin.chooseStyle(goblin, pending(null, false), true, NONE));
-	}
-
-	@Test
-	public void parsesOverrides()
-	{
-		Overrides o = Overrides.parse("7222:10692:magic\nbad line\n1:2:nope", " 7222 : magic : 50 ",
-			"graphic:1234:20\nprojectile:55:30\nregion:12850:15\nfoo:1:2");
-		assertEquals(AttackStyle.MAGIC, o.style(7222, 10692));
-		assertNull(o.style(1, 2));
-		assertEquals(50, o.passThrough(7222, AttackStyle.MAGIC));
-		assertEquals(0, o.passThrough(7222, AttackStyle.MELEE));
-		assertEquals(Integer.valueOf(20), o.getGraphicHazards().get(1234));
-		assertEquals(Integer.valueOf(30), o.getProjectileHazards().get(55));
-		assertEquals(Integer.valueOf(15), o.getRegionHazards().get(12850));
 	}
 
 	@Test
