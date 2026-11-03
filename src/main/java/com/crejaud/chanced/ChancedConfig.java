@@ -20,6 +20,14 @@ public interface ChancedConfig extends Config
 	String SOUND_LIST_URL = "https://oldschool.runescape.wiki/w/List_of_in-game_sound_IDs";
 	/** snp_warning_ping: a short ping that stands out from the hitsplat and prayer sounds of a fight. */
 	int DEFAULT_SOUND_ID = 4832;
+	/** OSRS chat red. */
+	int DEFAULT_CHAT_COLOR = 0xEF1020;
+	int DEFAULT_MAX_RETRIES = 3;
+	int DEFAULT_RETRY_DELAY_MS = 2000;
+	/** Above okhttp's default of 10 seconds. */
+	int DEFAULT_NETWORK_TIMEOUT_SECONDS = 15;
+	int DEFAULT_IMAGE_TIMEOUT_SECONDS = 30;
+	int FULL_PERCENT = 100;
 
 	String PLACEHOLDERS = "Macros: %USERNAME% %SOURCE% %MAXHIT% %DAMAGE% %HP% (before the hit) %HPLEFT% "
 		+ "%STYLE% %PRAYER% %WORLD%";
@@ -83,7 +91,7 @@ public interface ChancedConfig extends Config
 	)
 	default Color chatColor()
 	{
-		return new Color(0xEF1020);
+		return new Color(DEFAULT_CHAT_COLOR);
 	}
 
 	@ConfigItem(
@@ -147,7 +155,7 @@ public interface ChancedConfig extends Config
 	)
 	default int soundVolume()
 	{
-		return 100;
+		return FULL_PERCENT;
 	}
 
 	@ConfigItem(
@@ -268,7 +276,7 @@ public interface ChancedConfig extends Config
 	)
 	default int maxRetries()
 	{
-		return 3;
+		return DEFAULT_MAX_RETRIES;
 	}
 
 	@Units(Units.MILLISECONDS)
@@ -281,7 +289,7 @@ public interface ChancedConfig extends Config
 	)
 	default int baseRetryDelay()
 	{
-		return 2000;
+		return DEFAULT_RETRY_DELAY_MS;
 	}
 
 	@Units(Units.SECONDS)
@@ -295,7 +303,7 @@ public interface ChancedConfig extends Config
 	)
 	default int networkTimeout()
 	{
-		return 15;
+		return DEFAULT_NETWORK_TIMEOUT_SECONDS;
 	}
 
 	@Units(Units.SECONDS)
@@ -309,7 +317,7 @@ public interface ChancedConfig extends Config
 	)
 	default int imageWriteTimeout()
 	{
-		return 30;
+		return DEFAULT_IMAGE_TIMEOUT_SECONDS;
 	}
 
 	@Units(Units.PERCENT)
@@ -323,7 +331,7 @@ public interface ChancedConfig extends Config
 	)
 	default int screenshotScale()
 	{
-		return 100;
+		return FULL_PERCENT;
 	}
 
 	@ConfigItem(

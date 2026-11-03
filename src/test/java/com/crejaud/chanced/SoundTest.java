@@ -6,15 +6,29 @@ import org.junit.Test;
 
 public class SoundTest
 {
+	private static final int FULL = 100;
+	private static final int HALF = 50;
+	private static final int TOO_LOUD = 250;
+	private static final int HALF_VOLUME = SoundEffectVolume.HIGH * HALF / FULL;
+
 	@Test
 	public void volumePercentMapsToClientScale()
 	{
-		assertEquals(SoundEffectVolume.HIGH, ChancedPlugin.soundVolume(100));
-		assertEquals(63, ChancedPlugin.soundVolume(50));
-		assertEquals(1, ChancedPlugin.soundVolume(1));
-		assertEquals(SoundEffectVolume.HIGH, ChancedPlugin.soundVolume(250));
+		// GIVEN volume percentages from 1% up to out of range
+		// WHEN converting each to the client's sound effect volume
+		int full = ChancedPlugin.soundVolume(FULL);
+		int half = ChancedPlugin.soundVolume(HALF);
+		int quietest = ChancedPlugin.soundVolume(1);
+		int tooLoud = ChancedPlugin.soundVolume(TOO_LOUD);
+
+		// THEN 100% is the loudest, and out of range values are capped there
+		assertEquals(SoundEffectVolume.HIGH, full);
+		assertEquals(HALF_VOLUME, half);
+		assertEquals(1, quietest);
+		assertEquals(SoundEffectVolume.HIGH, tooLoud);
 	}
 
+	// no-gherkin
 	@Test
 	public void footerIconIsADirectImageLink()
 	{

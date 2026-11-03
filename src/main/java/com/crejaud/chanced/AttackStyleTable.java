@@ -21,6 +21,10 @@ import lombok.extern.slf4j.Slf4j;
 class AttackStyleTable
 {
 	static final String RESOURCE = "attack_styles.txt";
+	/** Line fields: {@code a|p id STYLE [name]}. */
+	private static final int KIND_FIELD = 0;
+	private static final int ID_FIELD = 1;
+	private static final int STYLE_FIELD = 2;
 
 	private final Map<Integer, AttackHint> animations = new HashMap<>();
 	private final Map<Integer, AttackStyle> projectiles = new HashMap<>();
@@ -74,20 +78,20 @@ class AttackStyleTable
 				continue;
 			}
 			String[] f = line.split(" ");
-			if (f.length < 3)
+			if (f.length <= STYLE_FIELD)
 			{
 				continue;
 			}
 			try
 			{
-				int id = Integer.parseInt(f[1]);
-				if ("a".equals(f[0]))
+				int id = Integer.parseInt(f[ID_FIELD]);
+				if ("a".equals(f[KIND_FIELD]))
 				{
-					animations.put(id, AttackHint.valueOf(f[2]));
+					animations.put(id, AttackHint.valueOf(f[STYLE_FIELD]));
 				}
-				else if ("p".equals(f[0]))
+				else if ("p".equals(f[KIND_FIELD]))
 				{
-					projectiles.put(id, AttackStyle.valueOf(f[2]));
+					projectiles.put(id, AttackStyle.valueOf(f[STYLE_FIELD]));
 				}
 			}
 			catch (IllegalArgumentException e)

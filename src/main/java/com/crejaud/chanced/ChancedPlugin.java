@@ -22,6 +22,7 @@ import net.runelite.api.PlayerComposition;
 import net.runelite.api.Prayer;
 import net.runelite.api.Projectile;
 import net.runelite.api.Skill;
+import net.runelite.api.SoundEffectVolume;
 import net.runelite.api.WorldType;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.events.AnimationChanged;
@@ -59,6 +60,15 @@ public class ChancedPlugin extends Plugin
 	private static final int PLAYER_ANIMATION_WINDOW = 4;
 	private static final int CYCLES_PER_TICK = 30;
 	private static final int MAX_DISTANCE = 16;
+	/** Projectiles still unmatched this many ticks after launch are dropped. */
+	private static final int MAX_PROJECTILE_TICKS = 12;
+	/** A projectile counts as landed this tick if it landed up to this many ticks ago. */
+	private static final int LANDED_WINDOW_TICKS = 2;
+	private static final int PERCENT = 100;
+	/** The test messages' Scurrius chance: max hit 8 (Magic) for 0 at 8 HP. */
+	private static final int TEST_MAX_HIT = 8;
+	private static final int TEST_DAMAGE = 0;
+	private static final int TEST_HP = 8;
 
 	private static final Set<Integer> OVER_TIME = ImmutableSet.of(
 		HitsplatID.POISON, HitsplatID.VENOM, HitsplatID.DISEASE, HitsplatID.BURN, HitsplatID.BLEED,
@@ -191,7 +201,8 @@ public class ChancedPlugin extends Plugin
 	{
 		Player local = client.getLocalPlayer();
 		String name = local != null && local.getName() != null ? local.getName() : "Player";
-		return new ChancedEvent(name, "Scurrius", "Magic", prayerName(AttackStyle.MELEE), 8, 0, 8, 8,
+		return new ChancedEvent(name, "Scurrius", "Magic", prayerName(AttackStyle.MELEE), TEST_MAX_HIT, TEST_DAMAGE,
+			TEST_HP, TEST_HP - TEST_DAMAGE,
 			client.getWorld(), false);
 	}
 
@@ -278,7 +289,7 @@ public class ChancedPlugin extends Plugin
 			evaluateTick(tick);
 			tickHits.clear();
 		}
-		pending.removeIf(p -> p.consumed || tick - p.startTick > 12
+		pending.removeIf(p -> p.consumed || tick - p.startTick > MAX_PROJECTILE_TICKS
 			|| (!p.projectile && tick - p.startTick > PLAYER_ANIMATION_WINDOW));
 		projectiles.values().removeIf(p -> !pending.contains(p));
 	}
@@ -349,7 +360,7 @@ public class ChancedPlugin extends Plugin
 			}
 			if (p.projectile)
 			{
-				if (p.endCycle <= cycle + CYCLES_PER_TICK && p.endCycle >= cycle - 2 * CYCLES_PER_TICK)
+				if (p.endCycle <= cycle + CYCLES_PER_TICK && p.endCycle >= cycle - LANDED_WINDOW_TICKS * CYCLES_PER_TICK)
 				{
 					landed.add(p);
 				}
@@ -637,7 +648,7 @@ public class ChancedPlugin extends Plugin
 	/** Config percent (1-100) to the client's sound effect volume scale (0-127). */
 	static int soundVolume(int percent)
 	{
-		return Math.max(0, Math.min(100, percent)) * 127 / 100;
+		return Math.max(0, Math.min(PERCENT, percent)) * SoundEffectVolume.HIGH / PERCENT;
 	}
 
 	private void chat(String message)

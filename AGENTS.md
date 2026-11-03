@@ -67,6 +67,13 @@
 - Clean up subscriptions, listeners, and overlays in `shutDown()`.
 - Do not mix code reformatting with feature changes in the same commit — it makes diffs unreadable for reviewers.
 
+## Chanced code rules
+
+- **Unit tests use Gherkin phase comments**: `// GIVEN`, `// AND`, `// WHEN`, `// THEN` above each phase of every test.
+  A trivial one-assert test may carry `// no-gherkin` above its `@Test` instead.
+- **No magic numbers**, in main or test code: every number except -1, 0 and 1 is a named constant. Checkstyle's
+  `MagicNumber` rule in `config/checkstyle/checkstyle.xml` enforces it in CI.
+
 ## Testing
 
 You cannot verify plugin behavior yourself. Even if you have screen-capture or computer-use tools available, **do not use them to interact with RuneScape** — automating game input violates Jagex's third-party client guidelines and will get the user's account banned. Only the user can confirm a plugin works in-game.

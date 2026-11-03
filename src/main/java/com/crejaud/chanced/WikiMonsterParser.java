@@ -29,6 +29,12 @@ final class WikiMonsterParser
 	private static final Pattern NUMBER = Pattern.compile(
 		"^~?(\\d+)\\s*(?:[x×]\\s*(\\d+)|((?:\\s*[+/-]\\s*\\d+)+))?\\+?\\s*(.*)$");
 	private static final Pattern FOLLOW = Pattern.compile("([+/-])\\s*(\\d+)");
+	/** {@link #NUMBER} groups after the number itself: the multiplier, the follow-ups and the rest. */
+	private static final int MULTIPLIER = 2;
+	private static final int FOLLOW_UPS = 3;
+	private static final int REST = 4;
+	/** {@link #FOLLOW} group of the follow-up's value. */
+	private static final int FOLLOW_VALUE = 2;
 	private static final Pattern LABEL = Pattern.compile("\\(([^)]*)\\)?");
 
 	private WikiMonsterParser()
@@ -108,16 +114,16 @@ final class WikiMonsterParser
 			return;
 		}
 		int value = Integer.parseInt(m.group(1));
-		if (m.group(2) != null)
+		if (m.group(MULTIPLIER) != null)
 		{
-			value *= Integer.parseInt(m.group(2));
+			value *= Integer.parseInt(m.group(MULTIPLIER));
 		}
-		else if (m.group(3) != null)
+		else if (m.group(FOLLOW_UPS) != null)
 		{
-			Matcher f = FOLLOW.matcher(m.group(3));
+			Matcher f = FOLLOW.matcher(m.group(FOLLOW_UPS));
 			while (f.find())
 			{
-				int n = Integer.parseInt(f.group(2));
+				int n = Integer.parseInt(f.group(FOLLOW_VALUE));
 				value = "+".equals(f.group(1)) ? value + n : Math.max(value, n);
 			}
 		}
@@ -126,7 +132,7 @@ final class WikiMonsterParser
 			return;
 		}
 
-		String rest = m.group(4).trim();
+		String rest = m.group(REST).trim();
 		Matcher l = LABEL.matcher(rest);
 		String rawLabel = (l.find() ? l.group(1) : rest).trim();
 		String label = rawLabel.toLowerCase(Locale.ROOT);

@@ -35,6 +35,11 @@ class DiscordNotifier
 	private static final int EMBED_COLOR = 0xC0392B;
 	/** Longest wait between retries, however many there are. */
 	private static final long MAX_RETRY_DELAY_MS = 60_000;
+	/** Caps the shift so the delay cannot overflow before the minute cap applies. */
+	private static final int MAX_DOUBLINGS = 20;
+	private static final int HTTP_TOO_MANY_REQUESTS = 429;
+	private static final int HTTP_SERVER_ERROR = 500;
+	private static final int PERCENT = 100;
 
 	private final OkHttpClient httpClient;
 	private final Gson gson;
@@ -68,7 +73,7 @@ class DiscordNotifier
 			d.baseRetryDelayMs = Math.max(0, config.baseRetryDelay());
 			d.networkTimeoutSeconds = Math.max(1, config.networkTimeout());
 			d.imageWriteTimeoutSeconds = Math.max(1, config.imageWriteTimeout());
-			d.screenshotScale = Math.max(1, Math.min(100, config.screenshotScale()));
+			d.screenshotScale = Math.max(1, Math.min(PERCENT, config.screenshotScale()));
 			d.footerText = config.embedFooterText();
 			d.footerIcon = config.embedFooterIcon();
 			return d;
@@ -103,12 +108,12 @@ class DiscordNotifier
 
 	static BufferedImage scale(BufferedImage image, int percent)
 	{
-		if (percent >= 100)
+		if (percent >= PERCENT)
 		{
 			return image;
 		}
-		int width = Math.max(1, image.getWidth() * percent / 100);
-		int height = Math.max(1, image.getHeight() * percent / 100);
+		int width = Math.max(1, image.getWidth() * percent / PERCENT);
+		int height = Math.max(1, image.getHeight() * percent / PERCENT);
 		return ImageUtil.resizeImage(image, width, height, true);
 	}
 
@@ -167,7 +172,7 @@ class DiscordNotifier
 	/** Wait before retry number {@code attempt} (1-based): base, 2 x base, 4 x base... capped at a minute. */
 	static long retryDelayMs(int baseMs, int attempt)
 	{
-		long delay = (long) baseMs << Math.min(attempt - 1, 20);
+		long delay = (long) baseMs << Math.min(attempt - 1, MAX_DOUBLINGS);
 		return Math.min(delay, MAX_RETRY_DELAY_MS);
 	}
 
@@ -220,7 +225,7 @@ class DiscordNotifier
 				}
 				log.debug("Discord webhook returned HTTP {}", code);
 				// Rate limits and server errors are worth another try; a bad URL or payload is not.
-				if (code == 429 || code >= 500)
+				if (code == HTTP_TOO_MANY_REQUESTS || code >= HTTP_SERVER_ERROR)
 				{
 					retry(client, request, retriesDone, delivery);
 				}
