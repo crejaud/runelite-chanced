@@ -33,7 +33,7 @@ flowchart TD
     L -- "No" --> M[Full wiki max hit]
     L -- "Yes, NPC" --> N{Did the hit get through anyway?}
     N -- No --> O[Blocked: max 0]
-    N -- Yes --> P[It was a special, e.g. prayer smash:<br/>use the special's max]
+    N -- Yes --> P[Special on the wiki, e.g. prayer smash?<br/>use the special's max, else the damage dealt]
     L -- "Yes, player" --> Q[Estimated max x 0.6]
     I & M & O & P & Q --> R[Sum the max of every attack this tick<br/>plus damage-over-time at the damage dealt]
     R --> S{Sum >= HP at the hit?}
@@ -47,6 +47,10 @@ flowchart TD
   is a magic attack), bundled with the plugin as a snapshot. An attack not in the snapshot falls back to the NPC's
   wiki attack styles, taking the worst case for you.
 - Type `::chancedrefresh` to download the max hits again.
+- **Protection the wiki tables separately:** dragonfire max hits follow your anti-dragon shield, Protect from Magic
+  and (super) antifire; the Gauntlet's Hunllef follows your crystal armour tier, hits through prayer up to its prayed
+  max, and its tornadoes and floor tiles count separately. Wiki maxes that depend on gear ("without Nose peg") are
+  ignored.
 - **Several hits on one tick** are added together. Two hitsplats from one attack count its max once.
 - **Players** (Wilderness, PvP and Deadman worlds, or anywhere with *Outside PvP areas*): the max hit is a worst-case
   estimate from their visible gear with 99s, boosting potions, Piety/Rigour, a berserker ring, dragon bolts and 25%
