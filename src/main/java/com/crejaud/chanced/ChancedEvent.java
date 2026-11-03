@@ -9,7 +9,7 @@ class ChancedEvent
 	String username;
 	String source;
 	String style;
-	/** Protection prayer that was up, or "None". */
+	/** Protection prayer that was up, e.g. "Protect from Melee", or "None". */
 	String prayer;
 	int maxHit;
 	int damage;
@@ -36,20 +36,21 @@ class ChancedEvent
 
 	String format(String template)
 	{
-		return template
-			.replace("%USERNAME%", username)
-			.replace("%SOURCE%", source)
-			.replace("%MAXHIT%", maxHitText())
-			.replace("%DAMAGE%", String.valueOf(damage))
-			.replace("%HP%", String.valueOf(hpBefore))
-			.replace("%STYLE%", style)
-			.replace("%WORLD%", String.valueOf(world));
+		return format(template, "");
 	}
 
-	/** "Max hit 8 (Magic), actually hit 0, at 8 HP." */
-	String summary()
+	/** Fills the placeholders, wrapping the name, source, max hit and damage in {@code emphasis}. */
+	String format(String template, String emphasis)
 	{
-		return "Max hit " + maxHitText() + " (" + style + "), actually hit " + damage + ", at " + hpBefore + " HP."
-			+ (estimate ? " (PvP estimate)" : "");
+		return template
+			.replace("%USERNAME%", emphasis + username + emphasis)
+			.replace("%SOURCE%", emphasis + source + emphasis)
+			.replace("%MAXHIT%", emphasis + maxHitText() + emphasis)
+			.replace("%DAMAGE%", emphasis + damage + emphasis)
+			.replace("%HPLEFT%", String.valueOf(hpAfter))
+			.replace("%HP%", String.valueOf(hpBefore))
+			.replace("%STYLE%", style)
+			.replace("%PRAYER%", prayer)
+			.replace("%WORLD%", String.valueOf(world));
 	}
 }

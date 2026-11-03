@@ -3,8 +3,13 @@
 Alerts you (chat message, optional Discord webhook embed with screenshot) when something could have killed you and didn't:
 its max hit was at least your HP and you survived.
 
-> **Durial321** was chanced by **Scurrius**
-> Max hit **8** (Magic), actually hit **0**, at **8 HP**.
+In chat:
+
+> You were chanced by Scurrius: max hit 8 (Magic), hit 0, 8 HP left.
+
+On Discord:
+
+> **Durial321** was chanced by **Scurrius**: max hit **8** (Magic), hit **0** with 8 HP left. Prayer: Protect from Melee. World 302.
 
 ## How a chance is decided
 
@@ -47,15 +52,20 @@ flowchart TD
 
 | Setting | What it does |
 |---|---|
-| Chat message | Game chat message on a chance |
-| Message | Template: `%USERNAME% %SOURCE% %MAXHIT% %DAMAGE% %HP% %STYLE% %WORLD%` |
-| Webhook URL | Discord webhook(s), one per line. Blank turns Discord off |
-| Send screenshot | Attach a screenshot to the Discord embed |
+| Chat message › Chat message | Game chat message on a chance |
+| Chat message › Message | Chat message template |
+| Chat message › Text color | Color of the chat message |
+| Discord › Webhook URL | Discord webhook(s), one per line. Blank turns Discord off |
+| Discord › Message | Discord message template |
+| Discord › Send screenshot | Attach a screenshot to the Discord embed |
 | Player attacks / Outside PvP areas / Spec margin / Assumed ammo and ring | PvP estimate |
 | Unknown source HP | Alert on hits with no known source at or below this HP (0 = off) |
 | Style overrides | `npcId:animationId:style` |
 | Prayer pass-through | `npcId:style:percent` |
 | Hazards | `graphic:id:max`, `projectile:id:max`, `region:id:max` |
+
+Message placeholders: `%USERNAME%` `%SOURCE%` `%MAXHIT%` `%DAMAGE%` `%HP%` (HP before the hit) `%HPLEFT%` `%STYLE%`
+`%PRAYER%` `%WORLD%`.
 
 ## Network use
 

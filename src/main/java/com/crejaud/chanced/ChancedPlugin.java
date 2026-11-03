@@ -32,7 +32,6 @@ import net.runelite.api.events.ProjectileMoved;
 import net.runelite.api.HitsplatID;
 import net.runelite.api.gameval.VarbitID;
 import net.runelite.client.callback.ClientThread;
-import net.runelite.client.chat.ChatColorType;
 import net.runelite.client.chat.ChatMessageBuilder;
 import net.runelite.client.chat.ChatMessageManager;
 import net.runelite.client.chat.QueuedMessage;
@@ -614,7 +613,12 @@ public class ChancedPlugin extends Plugin
 	private String prayerName()
 	{
 		Set<AttackStyle> styles = protectedStyles();
-		return styles.isEmpty() ? "None" : styles.iterator().next().getDisplayName();
+		return styles.isEmpty() ? "None" : prayerName(styles.iterator().next());
+	}
+
+	static String prayerName(AttackStyle style)
+	{
+		return style == AttackStyle.RANGED ? "Protect from Missiles" : "Protect from " + style.getDisplayName();
 	}
 
 	private void notify(ChancedEvent event)
@@ -622,12 +626,12 @@ public class ChancedPlugin extends Plugin
 		log.debug("Chanced: {}", event);
 		if (config.chatMessage())
 		{
-			chat(event.format(config.messageTemplate()) + ". " + event.summary());
+			chat(event.format(config.chatTemplate()));
 		}
 		String webhooks = config.webhookUrl();
 		if (webhooks != null && !webhooks.trim().isEmpty())
 		{
-			discord.send(event, config.messageTemplate(), webhooks, config.sendScreenshot());
+			discord.send(event, config.discordTemplate(), webhooks, config.sendScreenshot());
 		}
 	}
 
@@ -636,8 +640,7 @@ public class ChancedPlugin extends Plugin
 		chatMessageManager.queue(QueuedMessage.builder()
 			.type(ChatMessageType.GAMEMESSAGE)
 			.runeLiteFormattedMessage(new ChatMessageBuilder()
-				.append(ChatColorType.HIGHLIGHT)
-				.append(message)
+				.append(config.chatColor(), message)
 				.build())
 			.build());
 	}

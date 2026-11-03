@@ -78,12 +78,8 @@ class DiscordNotifier
 		JsonObject embed = new JsonObject();
 		embed.addProperty("title", "Chanced!");
 		embed.addProperty("color", EMBED_COLOR);
-		String headline = event.format(template)
-			.replace(event.getUsername(), "**" + event.getUsername() + "**")
-			.replace(event.getSource(), "**" + event.getSource() + "**");
-		embed.addProperty("description", headline + "\nMax hit **" + event.maxHitText() + "** ("
-			+ event.getStyle() + "), actually hit **" + event.getDamage() + "**, at **" + event.getHpBefore()
-			+ " HP**." + (event.isEstimate() ? "\n_Max hit is a PvP estimate._" : ""));
+		embed.addProperty("description", event.format(template, "**")
+			+ (event.isEstimate() ? "\n_Max hit is a PvP estimate._" : ""));
 
 		JsonArray fields = new JsonArray();
 		fields.add(field("Max hit", event.maxHitText()));
