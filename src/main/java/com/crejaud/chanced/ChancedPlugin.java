@@ -170,7 +170,8 @@ public class ChancedPlugin extends Plugin
 			chat("Chanced: set a Discord webhook URL first.");
 			return;
 		}
-		discord.send(testEvent(), config.discordTemplate(), webhooks, config.sendScreenshot());
+		discord.send(testEvent(), config.discordTemplate(), webhooks, config.sendScreenshot(),
+			DiscordNotifier.Delivery.from(config));
 		chat("Chanced: sent a test message to Discord.");
 	}
 
@@ -572,6 +573,10 @@ public class ChancedPlugin extends Plugin
 	private void notify(ChancedEvent event)
 	{
 		log.debug("Chanced: {}", event);
+		if (!config.leaguesEnabled() && client.getWorldType().contains(WorldType.SEASONAL))
+		{
+			return;
+		}
 		if (config.chatMessage())
 		{
 			chat(event.format(config.chatTemplate()));
@@ -579,7 +584,8 @@ public class ChancedPlugin extends Plugin
 		String webhooks = config.webhookUrl();
 		if (config.discordEnabled() && webhooks != null && !webhooks.trim().isEmpty())
 		{
-			discord.send(event, config.discordTemplate(), webhooks, config.sendScreenshot());
+			discord.send(event, config.discordTemplate(), webhooks, config.sendScreenshot(),
+				DiscordNotifier.Delivery.from(config));
 		}
 	}
 

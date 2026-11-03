@@ -5,6 +5,8 @@ import net.runelite.client.config.Config;
 import net.runelite.client.config.ConfigGroup;
 import net.runelite.client.config.ConfigItem;
 import net.runelite.client.config.ConfigSection;
+import net.runelite.client.config.Range;
+import net.runelite.client.config.Units;
 
 @ConfigGroup(ChancedConfig.GROUP)
 public interface ChancedConfig extends Config
@@ -29,6 +31,15 @@ public interface ChancedConfig extends Config
 
 	@ConfigSection(name = "PvP", description = "Chances from other players", position = 20)
 	String pvpSection = "pvp";
+
+	@ConfigSection(name = "Leagues", description = "Seasonal worlds such as Leagues", position = 30)
+	String leaguesSection = "leagues";
+
+	@ConfigSection(name = "Advanced", description = "Webhook delivery and embed details", position = 40,
+		closedByDefault = true)
+	String advancedSection = "advanced";
+
+	String DEFAULT_FOOTER_ICON = "https://github.com/crejaud/runelite-chanced/raw/master/icon.png";
 
 	@ConfigItem(
 		keyName = "chatMessage",
@@ -161,5 +172,108 @@ public interface ChancedConfig extends Config
 	default boolean pvpAnywhere()
 	{
 		return false;
+	}
+
+	@ConfigItem(
+		keyName = "leaguesEnabled",
+		name = "Alerts on Leagues worlds",
+		description = "Alert on chances while playing on seasonal worlds such as Leagues",
+		section = leaguesSection,
+		position = 31
+	)
+	default boolean leaguesEnabled()
+	{
+		return false;
+	}
+
+	@ConfigItem(
+		keyName = "maxRetries",
+		name = "Webhook max retries",
+		description = "How many times to retry a failed webhook message. 0 means no retries",
+		section = advancedSection,
+		position = 41
+	)
+	default int maxRetries()
+	{
+		return 3;
+	}
+
+	@Units(Units.MILLISECONDS)
+	@ConfigItem(
+		keyName = "baseRetryDelay",
+		name = "Webhook retry base delay",
+		description = "Wait before the first retry; each later retry waits twice as long",
+		section = advancedSection,
+		position = 42
+	)
+	default int baseRetryDelay()
+	{
+		return 2000;
+	}
+
+	@Units(Units.SECONDS)
+	@Range(min = 1)
+	@ConfigItem(
+		keyName = "networkTimeout",
+		name = "Base network timeout",
+		description = "Seconds allowed to connect to and read from the webhook",
+		section = advancedSection,
+		position = 43
+	)
+	default int networkTimeout()
+	{
+		return 15;
+	}
+
+	@Units(Units.SECONDS)
+	@Range(min = 1)
+	@ConfigItem(
+		keyName = "imageWriteTimeout",
+		name = "Image upload timeout",
+		description = "Seconds allowed for uploading the screenshot",
+		section = advancedSection,
+		position = 44
+	)
+	default int imageWriteTimeout()
+	{
+		return 30;
+	}
+
+	@Units(Units.PERCENT)
+	@Range(min = 1, max = 100)
+	@ConfigItem(
+		keyName = "screenshotScale",
+		name = "Screenshot scale",
+		description = "Resizes the screenshot in each dimension by this percentage. Lower values upload faster",
+		section = advancedSection,
+		position = 45
+	)
+	default int screenshotScale()
+	{
+		return 100;
+	}
+
+	@ConfigItem(
+		keyName = "embedFooterText",
+		name = "Embed footer text",
+		description = "Footer text of the Discord embed. Leave empty for no footer",
+		section = advancedSection,
+		position = 46
+	)
+	default String embedFooterText()
+	{
+		return "Powered by Chanced";
+	}
+
+	@ConfigItem(
+		keyName = "embedFooterIcon",
+		name = "Embed footer icon",
+		description = "URL of the footer icon. Needs footer text",
+		section = advancedSection,
+		position = 47
+	)
+	default String embedFooterIcon()
+	{
+		return DEFAULT_FOOTER_ICON;
 	}
 }
