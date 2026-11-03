@@ -1,12 +1,14 @@
-package com.example;
+package com.crejaud.chanced;
 
 import net.runelite.client.config.Config;
 import net.runelite.client.config.ConfigGroup;
 import net.runelite.client.config.ConfigItem;
 
-@ConfigGroup("example")
-public interface ExampleConfig extends Config
+@ConfigGroup(ChancedConfig.GROUP)
+public interface ChancedConfig extends Config
 {
+	String GROUP = "chanced";
+
 	@ConfigItem(
 		keyName = "greeting",
 		name = "Welcome Greeting",
