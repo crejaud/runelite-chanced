@@ -1,7 +1,6 @@
 package com.crejaud.chanced;
 
 import java.awt.Color;
-import net.runelite.api.SoundEffectID;
 import net.runelite.client.config.Config;
 import net.runelite.client.config.ConfigGroup;
 import net.runelite.client.config.ConfigItem;
@@ -19,8 +18,8 @@ public interface ChancedConfig extends Config
 	String TEST_SOUND = "testSound";
 	String OPEN_SOUND_LIST = "openSoundList";
 	String SOUND_LIST_URL = "https://oldschool.runescape.wiki/w/List_of_in-game_sound_IDs";
-	/** Town crier bell "ding": stands out from the hitsplat and prayer sounds of a fight. */
-	int DEFAULT_SOUND_ID = SoundEffectID.TOWN_CRIER_BELL_DING;
+	/** snp_warning_ping: a short ping that stands out from the hitsplat and prayer sounds of a fight. */
+	int DEFAULT_SOUND_ID = 4832;
 
 	String PLACEHOLDERS = "Macros: %USERNAME% %SOURCE% %MAXHIT% %DAMAGE% %HP% (before the hit) %HPLEFT% "
 		+ "%STYLE% %PRAYER% %WORLD%";
@@ -115,8 +114,8 @@ public interface ChancedConfig extends Config
 		keyName = "soundId",
 		name = "Sound ID",
 		description = "Game sound effect to play. Tick Sound list below for every ID.<br>"
-			+ "3813 town crier bell (default), 1474 dice roll, 3129 heartbeat, 3879 God Wars gong,<br>"
-			+ "2918 lucky lightning, 2114 coins jingle, 4832 warning ping",
+			+ "4832 warning ping (default), 3813 town crier bell, 1474 dice roll, 3129 heartbeat,<br>"
+			+ "3879 God Wars gong, 2918 lucky lightning, 2114 coins jingle",
 		section = soundSection,
 		position = 7
 	)
