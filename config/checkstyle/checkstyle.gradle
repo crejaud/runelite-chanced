@@ -1,0 +1,11 @@
+// RuneLite's checkstyle rules, applied without touching build.gradle (which must match the
+// example-plugin template for the Plugin Hub). Run with:
+//   ./gradlew --init-script config/checkstyle/checkstyle.gradle checkstyleMain checkstyleTest
+allprojects {
+	apply plugin: 'checkstyle'
+	checkstyle {
+		toolVersion = '10.21.4'
+		configDirectory = rootProject.file('config/checkstyle')
+		maxWarnings = 0
+	}
+}
