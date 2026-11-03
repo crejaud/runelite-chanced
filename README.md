@@ -3,7 +3,7 @@
 Alerts you (chat message, optional Discord webhook embed with screenshot) when something could have killed you and didn't:
 its max hit was at least your HP and you survived.
 
-> **Corey** was chanced by **Scurrius**
+> **Durial321** was chanced by **Scurrius**
 > Max hit **8** (Magic), actually hit **0**, at **8 HP**.
 
 ## How a chance is decided
