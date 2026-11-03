@@ -54,6 +54,8 @@ flowchart TD
 
 ## Settings
 
+<img src="docs/settings.png" alt="Chanced settings" width="229">
+
 Hover a setting in RuneLite for its description. The *Send test* checkboxes untick themselves after sending.
 
 Message placeholders: `%USERNAME%` `%SOURCE%` `%MAXHIT%` `%DAMAGE%` `%HP%` (HP before the hit) `%HPLEFT%` `%STYLE%`
