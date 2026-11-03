@@ -52,28 +52,7 @@ flowchart TD
 
 ## Settings
 
-| Setting | What it does |
-|---|---|
-| Chat message › Enabled | Game chat message on a chance |
-| Chat message › Message | Chat message template |
-| Chat message › Text color | Color of the chat message |
-| Chat message › Send test | Shows a test chat message (Scurrius) |
-| Discord › Enabled | Post chances to Discord (off by default) |
-| Discord › Webhook URL | Discord webhook(s), one per line |
-| Discord › Message | Discord message template |
-| Discord › Send screenshot | Attach a screenshot to the Discord embed |
-| Discord › Send test | Posts a test message (Scurrius) to the webhook |
-| PvP › Player attacks | Alert on chances from other players |
-| PvP › Outside PvP areas | Also check players outside the Wilderness, PvP and Deadman worlds |
-| Leagues › Alerts on Leagues worlds | Alert on seasonal worlds such as Leagues (off by default) |
-| Advanced › Webhook max retries | Retries for a failed Discord message (default 3) |
-| Advanced › Webhook retry base delay | Wait before the first retry, doubling after each (default 2000 ms) |
-| Advanced › Base network timeout | Connect and read timeout for the webhook (default 15 s) |
-| Advanced › Image upload timeout | Time allowed to upload the screenshot (default 30 s) |
-| Advanced › Screenshot scale | Resize the screenshot (default 100%) |
-| Advanced › Embed footer text / icon | Discord embed footer (default "Powered by Chanced" with the plugin icon) |
-
-The *Send test* checkboxes untick themselves after sending.
+Hover a setting in RuneLite for its description. The *Send test* checkboxes untick themselves after sending.
 
 Message placeholders: `%USERNAME%` `%SOURCE%` `%MAXHIT%` `%DAMAGE%` `%HP%` (HP before the hit) `%HPLEFT%` `%STYLE%`
 `%PRAYER%` `%WORLD%`.
