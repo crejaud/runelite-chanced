@@ -58,9 +58,11 @@ flowchart TD
 
 ## Settings
 
-<img src="docs/settings.png" alt="Chanced settings" width="229">
+<img src="docs/settings.png" alt="Chanced settings" width="243">
 
-Hover a setting in RuneLite for its description. The *Send test* checkboxes untick themselves after sending.
+Hover a setting in RuneLite for its description. The *Send test* checkboxes untick themselves after sending. The sound
+plays at its own volume, even with game sound effects muted; find sound IDs in the OSRS Wiki's
+[list of sound IDs](https://oldschool.runescape.wiki/w/List_of_in-game_sound_IDs) (the *Sound list* checkbox opens it).
 
 ### Message macros
 
