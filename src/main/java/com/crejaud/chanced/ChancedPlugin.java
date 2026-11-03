@@ -10,6 +10,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Consumer;
 import javax.inject.Inject;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Actor;
@@ -88,6 +89,9 @@ public class ChancedPlugin extends Plugin
 	private MaxHitRepository maxHits;
 
 	@Inject
+	private AttackStyleTable attackStyles;
+
+	@Inject
 	private PvpEstimator pvpEstimator;
 
 	@Inject
@@ -125,6 +129,7 @@ public class ChancedPlugin extends Plugin
 		projectiles.clear();
 		tickHits.clear();
 		maxHits.clear();
+		attackStyles.clear();
 	}
 
 	@Provides
@@ -183,7 +188,7 @@ public class ChancedPlugin extends Plugin
 	{
 		if (REFRESH_COMMAND.equalsIgnoreCase(event.getCommand()))
 		{
-			chat("Refreshing max hits from the OSRS Wiki...");
+			chat("Refreshing max hits and attack styles...");
 			loadMaxHits(true);
 		}
 	}
@@ -203,7 +208,7 @@ public class ChancedPlugin extends Plugin
 		p.protectedAtStart = protectedStyles();
 		if (actor instanceof NPC)
 		{
-			AttackHint hint = AttackStyleTable.animation(actor.getAnimation());
+			AttackHint hint = attackStyles.animation(actor.getAnimation());
 			if (hint == null)
 			{
 				return;
@@ -231,7 +236,7 @@ public class ChancedPlugin extends Plugin
 		p.startTick = client.getTickCount();
 		p.endCycle = projectile.getEndCycle();
 		p.projectile = true;
-		p.style = AttackStyleTable.projectile(projectile.getId());
+		p.style = attackStyles.projectile(projectile.getId());
 		p.protectedAtStart = protectedStyles();
 		projectiles.put(projectile, p);
 		pending.add(p);
@@ -592,14 +597,16 @@ public class ChancedPlugin extends Plugin
 	{
 		try
 		{
-			maxHits.load(getPluginDirectory(), force, status ->
+			Consumer<String> done = status ->
 			{
 				log.info("Chanced: {}", status);
 				if (force)
 				{
 					clientThread.invoke(() -> chat(status));
 				}
-			});
+			};
+			maxHits.load(getPluginDirectory(), force, done);
+			attackStyles.load(getPluginDirectory(), force, done);
 		}
 		catch (IOException e)
 		{

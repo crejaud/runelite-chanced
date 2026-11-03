@@ -40,8 +40,12 @@ flowchart TD
 ```
 
 - **Max hits** come from one download of the OSRS Wiki's `infobox_monster` data (id, name, max hit, attack style),
-  cached in `.runelite/chanced/max-hits-v2.json` for 24 hours. Type `::chancedrefresh` to download again.
-- **Attack styles** come from RuneLite's named animation and projectile IDs (`scripts/generate_attack_styles.py`).
+  cached in `.runelite/chanced/max-hits-v2.json` for 24 hours.
+- **Attack styles** come from the names of RuneLite's animation and projectile IDs (`NPC_RAT_BOSS_ATTACK_MAGIC_01`
+  is a magic attack). The plugin reads RuneLite's gameval source files once a day and caches the result in
+  `.runelite/chanced/attack-styles-v1.txt`, so new content is picked up without a plugin update. A bundled snapshot
+  covers an offline first run; anything not in the table falls back to the NPC's wiki attack styles.
+- Type `::chancedrefresh` to download both again.
 - **Several hits on one tick** are added together. Two hitsplats from one attack count its max once.
 - **Players** (Wilderness, PvP and Deadman worlds, or anywhere with *Outside PvP areas*): the max hit is a worst-case
   estimate from their visible gear with 99s, boosting potions, Piety/Rigour, a berserker ring, dragon bolts and 25%
@@ -71,6 +75,8 @@ Message placeholders: `%USERNAME%` `%SOURCE%` `%MAXHIT%` `%DAMAGE%` `%HP%` (HP b
 ## Network use
 
 - OSRS Wiki API: one download of monster max hits per day.
+- GitHub (`raw.githubusercontent.com/runelite/runelite`): RuneLite's `AnimationID.java` and `SpotanimID.java`, once a
+  day, read as text for attack style names.
 - Your Discord webhook, only when Discord is enabled.
 
 ## Development
@@ -80,11 +86,3 @@ Message placeholders: `%USERNAME%` `%SOURCE%` `%MAXHIT%` `%DAMAGE%` `%HP%` (HP b
 ./gradlew run      # launch RuneLite with the plugin (developer mode)
 ./gradlew --init-script config/checkstyle/checkstyle.gradle checkstyleMain checkstyleTest   # RuneLite code style
 ```
-
-### Maintenance is automatic
-
-The attack style table (`src/main/resources/com/crejaud/chanced/attack_styles.txt`) is plain numeric data generated
-from RuneLite's gameval names, so a RuneLite rename can never break the build. The weekly
-[Update attack styles](.github/workflows/update-attack-styles.yml) workflow builds against the latest RuneLite release,
-regenerates the table and auto-merges it once CI passes. Animations and projectiles missing from the table fall back to
-the NPC's wiki attack styles. A failed weekly run means a RuneLite release broke the build.
