@@ -70,8 +70,10 @@ flowchart TD
 ./gradlew --init-script config/checkstyle/checkstyle.gradle checkstyleMain checkstyleTest   # RuneLite code style
 ```
 
-To regenerate the attack style table after a RuneLite update:
+### Maintenance is automatic
 
-```sh
-python scripts/generate_attack_styles.py path/to/runelite-api-<version>.jar
-```
+The attack style table (`src/main/resources/com/crejaud/chanced/attack_styles.txt`) is plain numeric data generated
+from RuneLite's gameval names, so a RuneLite rename can never break the build. The weekly
+[Update attack styles](.github/workflows/update-attack-styles.yml) workflow builds against the latest RuneLite release,
+regenerates the table and auto-merges it once CI passes. Animations and projectiles missing from the table fall back to
+the NPC's wiki attack styles. A failed weekly run means a RuneLite release broke the build.

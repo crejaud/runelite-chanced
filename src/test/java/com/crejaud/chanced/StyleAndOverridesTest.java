@@ -5,8 +5,6 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import java.util.EnumSet;
 import java.util.Set;
-import net.runelite.api.gameval.AnimationID;
-import net.runelite.api.gameval.SpotanimID;
 import org.junit.Test;
 
 public class StyleAndOverridesTest
@@ -34,10 +32,11 @@ public class StyleAndOverridesTest
 	@Test
 	public void tableKnowsScurrius()
 	{
-		assertEquals(AttackHint.MELEE, AttackStyleTable.animation(AnimationID.NPC_RAT_BOSS_ATTACK_MELEE_01));
-		assertEquals(AttackHint.MAGIC, AttackStyleTable.animation(AnimationID.NPC_RAT_BOSS_ATTACK_MAGIC_01));
-		assertEquals(AttackStyle.MAGIC, AttackStyleTable.projectile(SpotanimID.VFX_RAT_BOSS_PROJ_MAGIC_01));
-		assertEquals(AttackStyle.RANGED, AttackStyleTable.projectile(SpotanimID.VFX_RAT_BOSS_PROJ_RANGED_01));
+		// Scurrius: NPC_RAT_BOSS_ATTACK_MELEE_01, _MAGIC_01, VFX_RAT_BOSS_PROJ_MAGIC_01, _RANGED_01
+		assertEquals(AttackHint.MELEE, AttackStyleTable.animation(10692));
+		assertEquals(AttackHint.MAGIC, AttackStyleTable.animation(10696));
+		assertEquals(AttackStyle.MAGIC, AttackStyleTable.projectile(2640));
+		assertEquals(AttackStyle.RANGED, AttackStyleTable.projectile(2642));
 		assertTrue(AttackStyleTable.animationCount() > 1000);
 	}
 

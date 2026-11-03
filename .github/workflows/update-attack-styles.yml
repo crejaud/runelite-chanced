@@ -1,0 +1,64 @@
+name: Update attack styles
+
+# Weekly: build against the latest RuneLite release, regenerate attack_styles.txt from its
+# gameval names, and auto-merge the change once CI passes. A failed run (GitHub emails the
+# repo owner) means a RuneLite release broke the build and the plugin needs a code change.
+
+on:
+  schedule:
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+
+concurrency:
+  group: update-attack-styles
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      BRANCH: bot/update-attack-styles
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '11'
+
+      - name: Build and test against the latest RuneLite
+        run: ./gradlew build --refresh-dependencies --no-daemon
+
+      - name: Regenerate attack_styles.txt
+        run: |
+          jar=$(find ~/.gradle/caches/modules-2 -name 'runelite-api-*.jar' ! -name '*sources*' | sort -V | tail -1)
+          echo "Using $jar"
+          python3 scripts/generate_attack_styles.py "$jar"
+
+      - name: Open and auto-merge a PR if the table changed
+        run: |
+          if git diff --quiet; then
+            echo "attack_styles.txt is up to date"
+            exit 0
+          fi
+          ./gradlew test --no-daemon
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$BRANCH"
+          git commit -am "Update attack styles from the latest RuneLite gameval IDs"
+          git push -f origin "$BRANCH"
+          if ! gh pr view "$BRANCH" --json state --jq .state 2>/dev/null | grep -q OPEN; then
+            gh pr create --base master --head "$BRANCH" \
+              --title "Update attack styles from the latest RuneLite gameval IDs" \
+              --body "Automated weekly refresh of \`attack_styles.txt\`. Merges itself once CI passes."
+          fi
+          # PRs opened with GITHUB_TOKEN do not trigger workflows, so start CI on the branch by hand.
+          gh workflow run ci.yml --ref "$BRANCH"
+          gh pr merge "$BRANCH" --auto --squash --delete-branch
