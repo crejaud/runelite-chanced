@@ -10,7 +10,10 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ScheduledExecutorService;
 import javax.inject.Inject;
+import javax.sound.sampled.LineUnavailableException;
+import javax.sound.sampled.UnsupportedAudioFileException;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Actor;
 import net.runelite.api.ChatMessageType;
@@ -32,6 +35,7 @@ import net.runelite.api.events.HitsplatApplied;
 import net.runelite.api.events.ProjectileMoved;
 import net.runelite.api.gameval.VarbitID;
 import net.runelite.api.kit.KitType;
+import net.runelite.client.audio.AudioPlayer;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.chat.ChatMessageBuilder;
 import net.runelite.client.chat.ChatMessageManager;
@@ -41,6 +45,7 @@ import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
+import net.runelite.client.util.Filepath;
 import net.runelite.client.util.LinkBrowser;
 
 @Slf4j
@@ -65,6 +70,8 @@ public class ChancedPlugin extends Plugin
 	/** A projectile counts as landed this tick if it landed up to this many ticks ago. */
 	private static final int LANDED_WINDOW_TICKS = 2;
 	private static final int PERCENT = 100;
+	/** Decibels per tenfold change in amplitude. */
+	private static final int DECIBELS_PER_DECADE = 20;
 	/** The test messages' Scurrius chance: max hit 8 (Magic) for 0 at 8 HP. */
 	private static final int TEST_MAX_HIT = 8;
 	private static final int TEST_DAMAGE = 0;
@@ -108,6 +115,12 @@ public class ChancedPlugin extends Plugin
 
 	@Inject
 	private DiscordNotifier discord;
+
+	@Inject
+	private AudioPlayer audioPlayer;
+
+	@Inject
+	private ScheduledExecutorService executor;
 
 	/** An attack seen starting: an animation or a projectile. */
 	static final class Pending
@@ -175,6 +188,11 @@ public class ChancedPlugin extends Plugin
 		{
 			configManager.setConfiguration(ChancedConfig.GROUP, ChancedConfig.OPEN_SOUND_LIST, false);
 			LinkBrowser.browse(ChancedConfig.SOUND_LIST_URL);
+		}
+		else if (ChancedConfig.OPEN_SOUND_FOLDER.equals(event.getKey()))
+		{
+			configManager.setConfiguration(ChancedConfig.GROUP, ChancedConfig.OPEN_SOUND_FOLDER, false);
+			openSoundFolder();
 		}
 	}
 
@@ -642,7 +660,55 @@ public class ChancedPlugin extends Plugin
 
 	private void playSound()
 	{
+		if (config.soundType() != SoundType.CUSTOM_FILE)
+		{
+			playGameSound();
+			return;
+		}
+		float gain = soundGainDb(config.soundVolume());
+		executor.execute(() ->
+		{
+			try
+			{
+				audioPlayer.play(getPluginDirectory().joinSegment(ChancedConfig.CUSTOM_SOUND_FILE), gain);
+			}
+			catch (IOException | UnsupportedAudioFileException | LineUnavailableException | RuntimeException e)
+			{
+				log.debug("Could not play the custom sound", e);
+				clientThread.invoke(() ->
+				{
+					chat("Chanced: could not play " + ChancedConfig.CUSTOM_SOUND_FILE
+						+ " from the sound folder; playing the game sound instead.");
+					playGameSound();
+				});
+			}
+		});
+	}
+
+	private void playGameSound()
+	{
 		client.playSoundEffect(config.soundId(), soundVolume(config.soundVolume()));
+	}
+
+	/** Config percent (1-100) to decibels of gain for a sound file: 100% plays it as recorded. */
+	static float soundGainDb(int percent)
+	{
+		int p = Math.max(1, Math.min(PERCENT, percent));
+		return (float) (DECIBELS_PER_DECADE * Math.log10((double) p / PERCENT));
+	}
+
+	private void openSoundFolder()
+	{
+		try
+		{
+			Filepath dir = getPluginDirectory();
+			dir.createDirectories();
+			LinkBrowser.open(dir.toString());
+		}
+		catch (IOException e)
+		{
+			log.debug("Could not open the sound folder", e);
+		}
 	}
 
 	/** Config percent (1-100) to the client's sound effect volume scale (0-127). */

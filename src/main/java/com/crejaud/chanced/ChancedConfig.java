@@ -18,6 +18,9 @@ public interface ChancedConfig extends Config
 	String TEST_SOUND = "testSound";
 	String OPEN_SOUND_LIST = "openSoundList";
 	String SOUND_LIST_URL = "https://oldschool.runescape.wiki/w/List_of_in-game_sound_IDs";
+	String OPEN_SOUND_FOLDER = "openSoundFolder";
+	/** The custom sound, read from the plugin's folder in .runelite. */
+	String CUSTOM_SOUND_FILE = "chanced.wav";
 	/** snp_warning_ping: a short ping that stands out from the hitsplat and prayer sounds of a fight. */
 	int DEFAULT_SOUND_ID = 4832;
 	/** OSRS chat red. */
@@ -119,13 +122,26 @@ public interface ChancedConfig extends Config
 	}
 
 	@ConfigItem(
+		keyName = "soundType",
+		name = "Sound type",
+		description = "Game sound plays the Sound ID below. Custom file plays " + CUSTOM_SOUND_FILE
+			+ " from .runelite/chanced (tick Open sound folder); a WAV file works best",
+		section = soundSection,
+		position = 7
+	)
+	default SoundType soundType()
+	{
+		return SoundType.GAME_SOUND;
+	}
+
+	@ConfigItem(
 		keyName = "soundId",
 		name = "Sound ID",
 		description = "Game sound effect to play. Tick Sound list below for every ID.<br>"
 			+ "4832 warning ping (default), 3813 town crier bell, 1474 dice roll, 3129 heartbeat,<br>"
 			+ "3879 God Wars gong, 2918 lucky lightning, 2114 coins jingle",
 		section = soundSection,
-		position = 7
+		position = 8
 	)
 	default int soundId()
 	{
@@ -137,9 +153,21 @@ public interface ChancedConfig extends Config
 		name = "Sound list",
 		description = "Tick to open the OSRS Wiki's list of sound IDs in your browser; it unticks itself",
 		section = soundSection,
-		position = 10
+		position = 9
 	)
 	default boolean openSoundList()
+	{
+		return false;
+	}
+
+	@ConfigItem(
+		keyName = OPEN_SOUND_FOLDER,
+		name = "Open sound folder",
+		description = "Tick to open the folder for " + CUSTOM_SOUND_FILE + "; it unticks itself",
+		section = soundSection,
+		position = 10
+	)
+	default boolean openSoundFolder()
 	{
 		return false;
 	}
@@ -151,7 +179,7 @@ public interface ChancedConfig extends Config
 		name = "Volume",
 		description = "Volume of the sound, independent of the game's sound effect volume",
 		section = soundSection,
-		position = 8
+		position = 11
 	)
 	default int soundVolume()
 	{
@@ -163,7 +191,7 @@ public interface ChancedConfig extends Config
 		name = "Send test",
 		description = "Tick to play the sound; it unticks itself",
 		section = soundSection,
-		position = 9
+		position = 12
 	)
 	default boolean testSound()
 	{
