@@ -17,6 +17,8 @@ public interface ChancedConfig extends Config
 	String TEST_CHAT = "testChat";
 	String TEST_DISCORD = "testDiscord";
 	String TEST_SOUND = "testSound";
+	String OPEN_SOUND_LIST = "openSoundList";
+	String SOUND_LIST_URL = "https://oldschool.runescape.wiki/w/List_of_in-game_sound_IDs";
 	/** Town crier bell "ding": stands out from the hitsplat and prayer sounds of a fight. */
 	int DEFAULT_SOUND_ID = SoundEffectID.TOWN_CRIER_BELL_DING;
 
@@ -112,14 +114,27 @@ public interface ChancedConfig extends Config
 	@ConfigItem(
 		keyName = "soundId",
 		name = "Sound ID",
-		description = "Game sound effect to play. Default 3813 is the town crier's bell; "
-			+ "3924 is the Grand Exchange coin tinkle",
+		description = "Game sound effect to play. Tick Sound list below for every ID.<br>"
+			+ "3813 town crier bell (default), 1474 dice roll, 3129 heartbeat, 3879 God Wars gong,<br>"
+			+ "2918 lucky lightning, 2114 coins jingle, 4832 warning ping",
 		section = soundSection,
 		position = 7
 	)
 	default int soundId()
 	{
 		return DEFAULT_SOUND_ID;
+	}
+
+	@ConfigItem(
+		keyName = OPEN_SOUND_LIST,
+		name = "Sound list",
+		description = "Tick to open the OSRS Wiki's list of sound IDs in your browser; it unticks itself",
+		section = soundSection,
+		position = 10
+	)
+	default boolean openSoundList()
+	{
+		return false;
 	}
 
 	@Units(Units.PERCENT)

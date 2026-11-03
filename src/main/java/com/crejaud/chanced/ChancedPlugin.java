@@ -40,6 +40,7 @@ import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
+import net.runelite.client.util.LinkBrowser;
 
 @Slf4j
 @PluginDescriptor(
@@ -159,6 +160,11 @@ public class ChancedPlugin extends Plugin
 		{
 			configManager.setConfiguration(ChancedConfig.GROUP, ChancedConfig.TEST_SOUND, false);
 			clientThread.invoke(this::playSound);
+		}
+		else if (ChancedConfig.OPEN_SOUND_LIST.equals(event.getKey()))
+		{
+			configManager.setConfiguration(ChancedConfig.GROUP, ChancedConfig.OPEN_SOUND_LIST, false);
+			LinkBrowser.browse(ChancedConfig.SOUND_LIST_URL);
 		}
 	}
 
