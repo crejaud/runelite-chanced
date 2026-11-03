@@ -1,6 +1,7 @@
 package com.crejaud.chanced;
 
 import java.awt.Color;
+import net.runelite.api.SoundEffectID;
 import net.runelite.client.config.Config;
 import net.runelite.client.config.ConfigGroup;
 import net.runelite.client.config.ConfigItem;
@@ -15,6 +16,9 @@ public interface ChancedConfig extends Config
 	String WEBHOOK_WARNING = "This feature submits your IP address to a 3rd-party server not controlled or verified by RuneLite developers";
 	String TEST_CHAT = "testChat";
 	String TEST_DISCORD = "testDiscord";
+	String TEST_SOUND = "testSound";
+	/** Town crier bell "ding": stands out from the hitsplat and prayer sounds of a fight. */
+	int DEFAULT_SOUND_ID = SoundEffectID.TOWN_CRIER_BELL_DING;
 
 	String PLACEHOLDERS = "Macros: %USERNAME% %SOURCE% %MAXHIT% %DAMAGE% %HP% (before the hit) %HPLEFT% "
 		+ "%STYLE% %PRAYER% %WORLD%";
@@ -25,6 +29,9 @@ public interface ChancedConfig extends Config
 
 	@ConfigSection(name = "Chat message", description = "Game chat message when you get chanced", position = 0)
 	String chatSection = "chat";
+
+	@ConfigSection(name = "Sound", description = "Sound effect when you get chanced", position = 5)
+	String soundSection = "sound";
 
 	@ConfigSection(name = "Discord", description = "Post chances to a Discord webhook", position = 10)
 	String discordSection = "discord";
@@ -39,7 +46,8 @@ public interface ChancedConfig extends Config
 		closedByDefault = true)
 	String advancedSection = "advanced";
 
-	String DEFAULT_FOOTER_ICON = "https://github.com/crejaud/runelite-chanced/raw/master/icon.png";
+	/** Direct image link: Discord does not follow github.com's redirect to it. */
+	String DEFAULT_FOOTER_ICON = "https://raw.githubusercontent.com/crejaud/runelite-chanced/master/icon.png";
 
 	@ConfigItem(
 		keyName = "chatMessage",
@@ -85,6 +93,57 @@ public interface ChancedConfig extends Config
 		position = 4
 	)
 	default boolean testChat()
+	{
+		return false;
+	}
+
+	@ConfigItem(
+		keyName = "soundEnabled",
+		name = "Enabled",
+		description = "Play a sound effect when you get chanced",
+		section = soundSection,
+		position = 6
+	)
+	default boolean soundEnabled()
+	{
+		return true;
+	}
+
+	@ConfigItem(
+		keyName = "soundId",
+		name = "Sound ID",
+		description = "Game sound effect to play. Default 3813 is the town crier's bell; "
+			+ "3924 is the Grand Exchange coin tinkle",
+		section = soundSection,
+		position = 7
+	)
+	default int soundId()
+	{
+		return DEFAULT_SOUND_ID;
+	}
+
+	@Units(Units.PERCENT)
+	@Range(min = 1, max = 100)
+	@ConfigItem(
+		keyName = "soundVolume",
+		name = "Volume",
+		description = "Volume of the sound, independent of the game's sound effect volume",
+		section = soundSection,
+		position = 8
+	)
+	default int soundVolume()
+	{
+		return 100;
+	}
+
+	@ConfigItem(
+		keyName = TEST_SOUND,
+		name = "Send test",
+		description = "Tick to play the sound; it unticks itself",
+		section = soundSection,
+		position = 9
+	)
+	default boolean testSound()
 	{
 		return false;
 	}

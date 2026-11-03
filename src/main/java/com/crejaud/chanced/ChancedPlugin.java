@@ -155,6 +155,11 @@ public class ChancedPlugin extends Plugin
 			configManager.setConfiguration(ChancedConfig.GROUP, ChancedConfig.TEST_DISCORD, false);
 			clientThread.invoke(this::sendTestDiscord);
 		}
+		else if (ChancedConfig.TEST_SOUND.equals(event.getKey()))
+		{
+			configManager.setConfiguration(ChancedConfig.GROUP, ChancedConfig.TEST_SOUND, false);
+			clientThread.invoke(this::playSound);
+		}
 	}
 
 	private void sendTestDiscord()
@@ -606,12 +611,27 @@ public class ChancedPlugin extends Plugin
 		{
 			chat(event.format(config.chatTemplate()));
 		}
+		if (config.soundEnabled())
+		{
+			playSound();
+		}
 		String webhooks = config.webhookUrl();
 		if (config.discordEnabled() && webhooks != null && !webhooks.trim().isEmpty())
 		{
 			discord.send(event, config.discordTemplate(), webhooks, config.sendScreenshot(),
 				DiscordNotifier.Delivery.from(config));
 		}
+	}
+
+	private void playSound()
+	{
+		client.playSoundEffect(config.soundId(), soundVolume(config.soundVolume()));
+	}
+
+	/** Config percent (1-100) to the client's sound effect volume scale (0-127). */
+	static int soundVolume(int percent)
+	{
+		return Math.max(0, Math.min(100, percent)) * 127 / 100;
 	}
 
 	private void chat(String message)
