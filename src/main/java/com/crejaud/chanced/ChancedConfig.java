@@ -16,7 +16,7 @@ public interface ChancedConfig extends Config
 	String TEST_CHAT = "testChat";
 	String TEST_DISCORD = "testDiscord";
 
-	String PLACEHOLDERS = "Placeholders: %USERNAME% %SOURCE% %MAXHIT% %DAMAGE% %HP% (before the hit) %HPLEFT% "
+	String PLACEHOLDERS = "Macros: %USERNAME% %SOURCE% %MAXHIT% %DAMAGE% %HP% (before the hit) %HPLEFT% "
 		+ "%STYLE% %PRAYER% %WORLD%";
 	String DEFAULT_CHAT_TEMPLATE =
 		"You were chanced by %SOURCE%: max hit %MAXHIT% (%STYLE%), hit %DAMAGE%, %HPLEFT% HP left.";

@@ -58,8 +58,21 @@ flowchart TD
 
 Hover a setting in RuneLite for its description. The *Send test* checkboxes untick themselves after sending.
 
-Message placeholders: `%USERNAME%` `%SOURCE%` `%MAXHIT%` `%DAMAGE%` `%HP%` (HP before the hit) `%HPLEFT%` `%STYLE%`
-`%PRAYER%` `%WORLD%`.
+### Message macros
+
+The chat and Discord messages replace these with the chance's details:
+
+| Macro | Value | Example |
+|---|---|---|
+| `%USERNAME%` | Your character name | Durial321 |
+| `%SOURCE%` | What could have killed you | Scurrius |
+| `%MAXHIT%` | Its max hit (`~` in front for a PvP estimate) | 8 |
+| `%DAMAGE%` | What it actually hit | 0 |
+| `%HP%` | Your HP at the hit | 8 |
+| `%HPLEFT%` | Your HP after the hit | 8 |
+| `%STYLE%` | Attack style, or the special's name | Magic |
+| `%PRAYER%` | Your protection prayer, or None | Protect from Melee |
+| `%WORLD%` | World number | 302 |
 
 ## Network use
 
