@@ -437,8 +437,15 @@ public class ChancedPlugin extends Plugin
 			return null;
 		}
 		boolean prayed = style.isNormal() && (p.protectedAtStart.contains(style) || prayers.contains(style));
+		String name = npc.getName() != null ? npc.getName() : info.getName();
+		if (HunllefRules.isHunllef(npc.getId()))
+		{
+			// Unexplained hits in the Hunllef fight are its tornadoes and floor tiles.
+			return HunllefRules.attack(npc.getId(), name, unexplained ? AttackStyle.SPECIAL : style, prayed,
+				HunllefRules.armourPoints(client.getLocalPlayer()));
+		}
 		return Attack.builder()
-			.source(npc.getName() != null ? npc.getName() : info.getName())
+			.source(name)
 			.style(style)
 			.max(info.max(style))
 			.prayed(prayed)

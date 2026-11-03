@@ -85,17 +85,24 @@ final class ChanceCalculator
 		}
 		else if (attack.getStyle().isNormal() && attack.isPrayed())
 		{
-			// The right prayer blocks it fully, unless it went through anyway: a special
-			// (prayer smash), or the prayer came too late.
-			max = dealt > 0 ? (attack.getSpecialMax() > 0 ? attack.getSpecialMax() : attack.getMax()) : 0;
+			// The right prayer blocks it down to prayedMax, unless it went through anyway: a
+			// special (prayer smash), or the prayer came too late.
+			max = throughPrayer(attack, dealt)
+				? (attack.getSpecialMax() > 0 ? attack.getSpecialMax() : attack.getMax())
+				: attack.getPrayedMax();
 		}
 		return Math.max(max, dealt);
+	}
+
+	private static boolean throughPrayer(Attack attack, int dealt)
+	{
+		return dealt > attack.getPrayedMax();
 	}
 
 	private static String styleShown(Attack attack, int dealt)
 	{
 		if (!attack.isPlayer() && attack.getStyle().isNormal() && attack.isPrayed() && attack.getSpecialMax() > 0
-			&& dealt > 0)
+			&& throughPrayer(attack, dealt))
 		{
 			return attack.getSpecialName();
 		}

@@ -15,6 +15,9 @@ class Attack
 	int max;
 	/** Whether the correct protection prayer was up for this attack. */
 	boolean prayed;
+	/** Max hit through the correct protection prayer (NPCs); 0 when the prayer blocks it fully. */
+	@Builder.Default
+	int prayedMax = 0;
 	/** The attacker's typeless/special max, or -1 when it has none. */
 	@Builder.Default
 	int specialMax = -1;
