@@ -10,7 +10,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.Consumer;
 import javax.inject.Inject;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Actor;
@@ -129,7 +128,6 @@ public class ChancedPlugin extends Plugin
 		projectiles.clear();
 		tickHits.clear();
 		maxHits.clear();
-		attackStyles.clear();
 	}
 
 	@Provides
@@ -189,7 +187,7 @@ public class ChancedPlugin extends Plugin
 	{
 		if (REFRESH_COMMAND.equalsIgnoreCase(event.getCommand()))
 		{
-			chat("Refreshing max hits and attack styles...");
+			chat("Refreshing max hits from the OSRS Wiki...");
 			loadMaxHits(true);
 		}
 	}
@@ -603,16 +601,14 @@ public class ChancedPlugin extends Plugin
 	{
 		try
 		{
-			Consumer<String> done = status ->
+			maxHits.load(getPluginDirectory(), force, status ->
 			{
 				log.info("Chanced: {}", status);
 				if (force)
 				{
 					clientThread.invoke(() -> chat(status));
 				}
-			};
-			maxHits.load(getPluginDirectory(), force, done);
-			attackStyles.load(getPluginDirectory(), force, done);
+			});
 		}
 		catch (IOException e)
 		{
