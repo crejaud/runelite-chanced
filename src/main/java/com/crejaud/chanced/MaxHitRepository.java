@@ -42,6 +42,8 @@ class MaxHitRepository
 	private final OkHttpClient httpClient;
 	private final Gson gson;
 	private final ScheduledExecutorService executor;
+	/** The wiki page request in flight, cancelled when the plugin stops. */
+	private volatile Call inFlight;
 
 	private volatile Map<Integer, MonsterInfo> monsters = Collections.emptyMap();
 
@@ -64,8 +66,14 @@ class MaxHitRepository
 		return monsters.size();
 	}
 
+	/** Drops the loaded max hits and cancels a download in flight. */
 	void clear()
 	{
+		Call call = inFlight;
+		if (call != null)
+		{
+			call.cancel();
+		}
 		monsters = Collections.emptyMap();
 	}
 
@@ -125,11 +133,17 @@ class MaxHitRepository
 				+ ".limit(" + PAGE_SIZE + ").offset(" + offset + ").run()")
 			.build();
 		Request request = new Request.Builder().url(url).build();
-		httpClient.newCall(request).enqueue(new Callback()
+		Call pageCall = httpClient.newCall(request);
+		inFlight = pageCall;
+		pageCall.enqueue(new Callback()
 		{
 			@Override
 			public void onFailure(@Nonnull Call call, @Nonnull IOException e)
 			{
+				if (call.isCanceled())
+				{
+					return;
+				}
 				log.debug("Max hit download failed", e);
 				done.accept("Could not download max hits from the OSRS Wiki");
 			}
@@ -139,6 +153,10 @@ class MaxHitRepository
 			{
 				try (ResponseBody body = response.body())
 				{
+					if (call.isCanceled())
+					{
+						return;
+					}
 					if (!response.isSuccessful() || body == null)
 					{
 						done.accept("OSRS Wiki returned HTTP " + response.code());

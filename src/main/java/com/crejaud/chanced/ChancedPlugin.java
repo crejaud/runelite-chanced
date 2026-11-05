@@ -150,6 +150,7 @@ public class ChancedPlugin extends Plugin
 	@Override
 	protected void shutDown() throws Exception
 	{
+		discord.shutDown();
 		pending.clear();
 		projectiles.clear();
 		tickHits.clear();

@@ -6,7 +6,10 @@ import com.google.gson.JsonObject;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import javax.annotation.Nonnull;
 import javax.imageio.ImageIO;
@@ -45,6 +48,9 @@ class DiscordNotifier
 	private final Gson gson;
 	private final DrawManager drawManager;
 	private final ScheduledExecutorService executor;
+	/** Webhook calls in flight and retries waiting to run, cancelled when the plugin stops. */
+	private final Set<Call> calls = ConcurrentHashMap.newKeySet();
+	private final Set<ScheduledFuture<?>> retries = ConcurrentHashMap.newKeySet();
 
 	@Inject
 	DiscordNotifier(OkHttpClient httpClient, Gson gson, DrawManager drawManager, ScheduledExecutorService executor)
@@ -53,6 +59,15 @@ class DiscordNotifier
 		this.gson = gson;
 		this.drawManager = drawManager;
 		this.executor = executor;
+	}
+
+	/** Cancels every webhook call in flight and every retry still waiting. */
+	void shutDown()
+	{
+		retries.forEach(retry -> retry.cancel(false));
+		retries.clear();
+		calls.forEach(Call::cancel);
+		calls.clear();
 	}
 
 	/** Delivery settings, read from config when the message is sent. */
@@ -205,11 +220,18 @@ class DiscordNotifier
 
 	private void attempt(OkHttpClient client, Request request, int retriesDone, Delivery delivery)
 	{
-		client.newCall(request).enqueue(new Callback()
+		Call webhookCall = client.newCall(request);
+		calls.add(webhookCall);
+		webhookCall.enqueue(new Callback()
 		{
 			@Override
 			public void onFailure(@Nonnull Call call, @Nonnull IOException e)
 			{
+				calls.remove(call);
+				if (call.isCanceled())
+				{
+					return;
+				}
 				log.debug("Discord webhook failed", e);
 				retry(client, request, retriesDone, delivery);
 			}
@@ -217,6 +239,7 @@ class DiscordNotifier
 			@Override
 			public void onResponse(@Nonnull Call call, @Nonnull Response response)
 			{
+				calls.remove(call);
 				int code = response.code();
 				response.close();
 				if (response.isSuccessful())
@@ -240,7 +263,8 @@ class DiscordNotifier
 			return;
 		}
 		int next = retriesDone + 1;
-		executor.schedule(() -> attempt(client, request, next, delivery),
-			retryDelayMs(delivery.baseRetryDelayMs, next), TimeUnit.MILLISECONDS);
+		retries.removeIf(ScheduledFuture::isDone);
+		retries.add(executor.schedule(() -> attempt(client, request, next, delivery),
+			retryDelayMs(delivery.baseRetryDelayMs, next), TimeUnit.MILLISECONDS));
 	}
 }
