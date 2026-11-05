@@ -64,7 +64,7 @@ Hover a setting in RuneLite for its description. The *Send test* checkboxes unti
 plays at its own volume, even with game sound effects muted; find sound IDs in the OSRS Wiki's
 [list of sound IDs](https://oldschool.runescape.wiki/w/List_of_in-game_sound_IDs) (the *Sound list* checkbox opens it).
 *Sound type* picks the sound: *Chanced sound* (default, bundled with the plugin), *Game sound* (by ID) or *Custom
-file*: a WAV file named `chanced.wav` in `.runelite/chanced` (the *Open sound folder* checkbox opens it). Your file is
+file*: a WAV file named `chanced.wav` in `.runelite/chanced` (the *Show sound folder* checkbox posts its path in chat). Your file is
 never changed; switch back to *Chanced sound* any time. A custom file that cannot be played falls back to the Chanced
 sound.
 

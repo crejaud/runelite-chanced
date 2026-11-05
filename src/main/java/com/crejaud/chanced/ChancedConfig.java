@@ -127,7 +127,7 @@ public interface ChancedConfig extends Config
 		keyName = "soundType",
 		name = "Sound type",
 		description = "Chanced sound plays the plugin's own sound. Game sound plays the Sound ID below. "
-			+ "Custom file plays " + CUSTOM_SOUND_FILE + " from .runelite/chanced (tick Open sound folder); "
+			+ "Custom file plays " + CUSTOM_SOUND_FILE + " from .runelite/chanced (tick Show sound folder); "
 			+ "a WAV file works best",
 		section = soundSection,
 		position = 7
@@ -165,8 +165,8 @@ public interface ChancedConfig extends Config
 
 	@ConfigItem(
 		keyName = OPEN_SOUND_FOLDER,
-		name = "Open sound folder",
-		description = "Tick to open the folder for " + CUSTOM_SOUND_FILE + "; it unticks itself",
+		name = "Show sound folder",
+		description = "Tick to show the folder for " + CUSTOM_SOUND_FILE + " in chat; it unticks itself",
 		section = soundSection,
 		position = 10
 	)

@@ -192,7 +192,7 @@ public class ChancedPlugin extends Plugin
 		else if (ChancedConfig.OPEN_SOUND_FOLDER.equals(event.getKey()))
 		{
 			configManager.setConfiguration(ChancedConfig.GROUP, ChancedConfig.OPEN_SOUND_FOLDER, false);
-			openSoundFolder();
+			showSoundFolder();
 		}
 	}
 
@@ -727,17 +727,19 @@ public class ChancedPlugin extends Plugin
 		return (float) (DECIBELS_PER_DECADE * Math.log10((double) p / PERCENT));
 	}
 
-	private void openSoundFolder()
+	/** Posts the sound folder's path in chat: plugins may not open it, as that starts a process. */
+	private void showSoundFolder()
 	{
 		try
 		{
 			Filepath dir = getPluginDirectory();
 			dir.createDirectories();
-			LinkBrowser.open(dir.toString());
+			String message = "Chanced: put " + ChancedConfig.CUSTOM_SOUND_FILE + " in " + dir;
+			clientThread.invoke(() -> chat(message));
 		}
 		catch (IOException e)
 		{
-			log.debug("Could not open the sound folder", e);
+			log.debug("Could not create the sound folder", e);
 		}
 	}
 
