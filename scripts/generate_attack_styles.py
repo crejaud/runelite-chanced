@@ -34,7 +34,8 @@ ANIM_RULES = [
     ("MELEE", re.compile(r"MELEE|STAB|SLASH|CRUSH|PUNCH|BITE|CLAW|SWIPE")),
 ]
 PROJ_RULES = [
-    ("MAGIC", re.compile(r"MAGIC|MAGE|SPELL|(WIND|WATER|EARTH|FIRE)_(STRIKE|BOLT|BLAST|WAVE|SURGE)")),
+    # The Hunllef's prayer-disabling orb is one of its magic attacks.
+    ("MAGIC", re.compile(r"MAGIC|MAGE|SPELL|(WIND|WATER|EARTH|FIRE)_(STRIKE|BOLT|BLAST|WAVE|SURGE)|HUNLLEF_(ANTI)?PRAYER")),
     ("RANGED", re.compile(r"RANGED|_RANGE|ARROW|BOLT|DART|KNIFE|JAVELIN|THROWN|SPEAR|CHINCHOMPA")),
 ]
 ATTACK = re.compile(r"ATTACK|_ATK")

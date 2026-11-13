@@ -6,6 +6,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import java.util.Collections;
 import net.runelite.api.gameval.NpcID;
+import net.runelite.api.gameval.SpotanimID;
 import org.junit.Test;
 
 public class HunllefRulesTest
@@ -40,6 +41,9 @@ public class HunllefRulesTest
 	private static final int T3_HIT = 20;
 	private static final int PRAYED_HIT = 8;
 	private static final int TORNADO_HIT = 6;
+
+	private static final int[] PRAYER_ORBS = {
+		SpotanimID.CRYSTAL_HUNLLEF_PRAYER_TRAVEL, SpotanimID.CRYSTAL_HUNLLEF_PRAYER_TRAVEL_HM};
 
 	private static Verdict hit(Attack attack, int damage, int hpBefore)
 	{
@@ -130,5 +134,19 @@ public class HunllefRulesTest
 		assertNotNull(atMax);
 		assertEquals("Tornado or floor", atMax.getStyle());
 		assertNull(aboveMax);
+	}
+
+	@Test
+	public void prayerDisablingOrbIsMagic()
+	{
+		// GIVEN the bundled attack style snapshot
+		AttackStyleTable table = new AttackStyleTable();
+
+		// WHEN looking up both Hunllefs' prayer-disabling orbs
+		// THEN each is a magic attack
+		for (int orb : PRAYER_ORBS)
+		{
+			assertEquals(AttackStyle.MAGIC, table.projectile(orb));
+		}
 	}
 }

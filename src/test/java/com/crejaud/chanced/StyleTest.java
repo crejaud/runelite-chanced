@@ -33,6 +33,10 @@ public class StyleTest
 	/** A 30 Ice Barrage boosted by 20%. */
 	private static final int MAGIC_ESTIMATE = 36;
 
+	private static final int ATTACK_TICK = 100;
+	/** Past the two-tick window an NPC's projectile may leave after its animation. */
+	private static final int LATE_TICKS = 3;
+
 	private static final Set<AttackStyle> NONE = EnumSet.noneOf(AttackStyle.class);
 
 	private static MonsterInfo scurrius()
@@ -153,5 +157,43 @@ public class StyleTest
 		// THEN it is an Ice Barrage boosted by the magic damage bonus
 		assertEquals(AttackStyle.MAGIC, style);
 		assertEquals(MAGIC_ESTIMATE, max);
+	}
+
+	@Test
+	public void projectileStyleBeatsAnimation()
+	{
+		// GIVEN an NPC whose animation says ranged and which fired a magic projectile a tick later
+		ChancedPlugin.SeenProjectile magic = new ChancedPlugin.SeenProjectile(null, AttackStyle.MAGIC, ATTACK_TICK + 1);
+
+		// WHEN choosing the style of the attack matched by that animation, or by an unnamed one
+		AttackStyle fromRanged = ChancedPlugin.withProjectile(AttackStyle.RANGED, ATTACK_TICK, magic);
+		AttackStyle fromUnknown = ChancedPlugin.withProjectile(null, ATTACK_TICK, magic);
+
+		// THEN the projectile's style wins
+		assertEquals(AttackStyle.MAGIC, fromRanged);
+		assertEquals(AttackStyle.MAGIC, fromUnknown);
+	}
+
+	@Test
+	public void animationStandsWithoutAProjectileFromThatAttack()
+	{
+		// GIVEN magic projectiles from before the animation and from well after it
+		ChancedPlugin.SeenProjectile earlier = new ChancedPlugin.SeenProjectile(null, AttackStyle.MAGIC, ATTACK_TICK - 1);
+		ChancedPlugin.SeenProjectile later = new ChancedPlugin.SeenProjectile(null, AttackStyle.MAGIC,
+			ATTACK_TICK + LATE_TICKS);
+
+		// WHEN choosing the style of a ranged animation, with no projectile, and of melee and special ones
+		AttackStyle none = ChancedPlugin.withProjectile(AttackStyle.RANGED, ATTACK_TICK, null);
+		AttackStyle stale = ChancedPlugin.withProjectile(AttackStyle.RANGED, ATTACK_TICK, earlier);
+		AttackStyle tooLate = ChancedPlugin.withProjectile(AttackStyle.RANGED, ATTACK_TICK, later);
+		AttackStyle melee = ChancedPlugin.withProjectile(AttackStyle.MELEE, ATTACK_TICK, later);
+		AttackStyle special = ChancedPlugin.withProjectile(AttackStyle.SPECIAL, ATTACK_TICK + LATE_TICKS, later);
+
+		// THEN the animation's style stands
+		assertEquals(AttackStyle.RANGED, none);
+		assertEquals(AttackStyle.RANGED, stale);
+		assertEquals(AttackStyle.RANGED, tooLate);
+		assertEquals(AttackStyle.MELEE, melee);
+		assertEquals(AttackStyle.SPECIAL, special);
 	}
 }

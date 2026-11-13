@@ -5,6 +5,7 @@ import com.google.inject.Provides;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -137,9 +138,26 @@ public class ChancedPlugin extends Plugin
 		boolean consumed;
 	}
 
+	/** A projectile seen leaving an NPC, and the tick it was seen. */
+	static final class SeenProjectile
+	{
+		final Projectile projectile;
+		final AttackStyle style;
+		final int tick;
+
+		SeenProjectile(Projectile projectile, AttackStyle style, int tick)
+		{
+			this.projectile = projectile;
+			this.style = style;
+			this.tick = tick;
+		}
+	}
+
 	private final List<Pending> pending = new ArrayList<>();
 	private final Map<Projectile, Pending> projectiles = new IdentityHashMap<>();
 	private final List<int[]> tickHits = new ArrayList<>();
+	/** Each NPC's latest projectile with a known style, whoever it targets. */
+	private final Map<Actor, SeenProjectile> lastProjectiles = new HashMap<>();
 
 	@Override
 	protected void startUp() throws Exception
@@ -154,6 +172,7 @@ public class ChancedPlugin extends Plugin
 		pending.clear();
 		projectiles.clear();
 		tickHits.clear();
+		lastProjectiles.clear();
 		maxHits.clear();
 	}
 
@@ -268,6 +287,13 @@ public class ChancedPlugin extends Plugin
 	public void onProjectileMoved(ProjectileMoved event)
 	{
 		Projectile projectile = event.getProjectile();
+		AttackStyle style = attackStyles.projectile(projectile.getId());
+		Actor source = projectile.getSourceActor();
+		SeenProjectile seen = lastProjectiles.get(source);
+		if (style != null && source instanceof NPC && (seen == null || seen.projectile != projectile))
+		{
+			lastProjectiles.put(source, new SeenProjectile(projectile, style, client.getTickCount()));
+		}
 		Player local = client.getLocalPlayer();
 		if (local == null || projectile.getTargetActor() != local || projectiles.containsKey(projectile))
 		{
@@ -278,7 +304,7 @@ public class ChancedPlugin extends Plugin
 		p.startTick = client.getTickCount();
 		p.endCycle = projectile.getEndCycle();
 		p.projectile = true;
-		p.style = attackStyles.projectile(projectile.getId());
+		p.style = style;
 		p.protectedAtStart = protectedStyles();
 		projectiles.put(projectile, p);
 		pending.add(p);
@@ -311,6 +337,7 @@ public class ChancedPlugin extends Plugin
 		pending.removeIf(p -> p.consumed || tick - p.startTick > MAX_PROJECTILE_TICKS
 			|| (!p.projectile && tick - p.startTick > PLAYER_ANIMATION_WINDOW));
 		projectiles.values().removeIf(p -> !pending.contains(p));
+		lastProjectiles.values().removeIf(s -> tick - s.tick > MAX_PROJECTILE_TICKS);
 	}
 
 	private void evaluateTick(int tick)
@@ -474,6 +501,10 @@ public class ChancedPlugin extends Plugin
 			return null;
 		}
 		Set<AttackStyle> prayers = protectedStyles();
+		if (!p.projectile && !unexplained)
+		{
+			p.style = withProjectile(p.style, p.startTick, lastProjectiles.get(npc));
+		}
 		AttackStyle style = chooseStyle(info, p, unexplained, prayers);
 		if (style == null)
 		{
@@ -501,6 +532,21 @@ public class ChancedPlugin extends Plugin
 			.specialMax(specialMax)
 			.specialName(info.getSpecialName())
 			.build();
+	}
+
+	/**
+	 * Style of an NPC attack matched by its animation. A projectile the NPC fired with that attack
+	 * wins for ranged and magic: animation names are labels, and some bosses (the Hunllef) play one
+	 * animation for both styles, while each style has its own projectile.
+	 */
+	static AttackStyle withProjectile(AttackStyle animation, int animationTick, SeenProjectile projectile)
+	{
+		if (projectile == null || animation == AttackStyle.MELEE || animation == AttackStyle.SPECIAL)
+		{
+			return animation;
+		}
+		int delay = projectile.tick - animationTick;
+		return delay >= 0 && delay <= NPC_ANIMATION_WINDOW ? projectile.style : animation;
 	}
 
 	private DragonfireRules.Protection dragonfireProtection(Set<AttackStyle> prayers)
