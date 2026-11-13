@@ -4,6 +4,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.inject.Provides;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
@@ -28,6 +29,7 @@ import net.runelite.api.Projectile;
 import net.runelite.api.Skill;
 import net.runelite.api.SoundEffectVolume;
 import net.runelite.api.WorldType;
+import net.runelite.api.coords.WorldArea;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.events.AnimationChanged;
 import net.runelite.api.events.CommandExecuted;
@@ -138,16 +140,14 @@ public class ChancedPlugin extends Plugin
 		boolean consumed;
 	}
 
-	/** A projectile seen leaving an NPC, and the tick it was seen. */
+	/** The style of a projectile seen leaving an NPC, and the tick it was seen. */
 	static final class SeenProjectile
 	{
-		final Projectile projectile;
 		final AttackStyle style;
 		final int tick;
 
-		SeenProjectile(Projectile projectile, AttackStyle style, int tick)
+		SeenProjectile(AttackStyle style, int tick)
 		{
-			this.projectile = projectile;
 			this.style = style;
 			this.tick = tick;
 		}
@@ -155,6 +155,8 @@ public class ChancedPlugin extends Plugin
 
 	private final List<Pending> pending = new ArrayList<>();
 	private final Map<Projectile, Pending> projectiles = new IdentityHashMap<>();
+	/** Projectiles in flight already read, so each is read once. */
+	private final Set<Projectile> seenProjectiles = Collections.newSetFromMap(new IdentityHashMap<>());
 	private final List<int[]> tickHits = new ArrayList<>();
 	/** Each NPC's latest projectile with a known style, whoever it targets. */
 	private final Map<Actor, SeenProjectile> lastProjectiles = new HashMap<>();
@@ -171,6 +173,7 @@ public class ChancedPlugin extends Plugin
 		discord.shutDown();
 		pending.clear();
 		projectiles.clear();
+		seenProjectiles.clear();
 		tickHits.clear();
 		lastProjectiles.clear();
 		maxHits.clear();
@@ -288,19 +291,25 @@ public class ChancedPlugin extends Plugin
 	{
 		Projectile projectile = event.getProjectile();
 		AttackStyle style = attackStyles.projectile(projectile.getId());
-		Actor source = projectile.getSourceActor();
-		SeenProjectile seen = lastProjectiles.get(source);
-		if (style != null && source instanceof NPC && (seen == null || seen.projectile != projectile))
-		{
-			lastProjectiles.put(source, new SeenProjectile(projectile, style, client.getTickCount()));
-		}
 		Player local = client.getLocalPlayer();
-		if (local == null || projectile.getTargetActor() != local || projectiles.containsKey(projectile))
+		// Moved fires every frame of a projectile's flight: read each one once, at its launch.
+		if (local == null || !seenProjectiles.add(projectile))
 		{
 			return;
 		}
+		Actor source = projectileSource(projectile);
+		if (style != null && source instanceof NPC)
+		{
+			lastProjectiles.put(source, new SeenProjectile(style, client.getTickCount()));
+		}
+		if (projectile.getTargetActor() != local)
+		{
+			return;
+		}
+		log.debug("Chanced: tick {} projectile {} style {} from {}", client.getTickCount(), projectile.getId(), style,
+			source != null ? source.getName() : null);
 		Pending p = new Pending();
-		p.actor = projectile.getSourceActor();
+		p.actor = source;
 		p.startTick = client.getTickCount();
 		p.endCycle = projectile.getEndCycle();
 		p.projectile = true;
@@ -338,6 +347,8 @@ public class ChancedPlugin extends Plugin
 			|| (!p.projectile && tick - p.startTick > PLAYER_ANIMATION_WINDOW));
 		projectiles.values().removeIf(p -> !pending.contains(p));
 		lastProjectiles.values().removeIf(s -> tick - s.tick > MAX_PROJECTILE_TICKS);
+		int cycle = client.getGameCycle();
+		seenProjectiles.removeIf(p -> p.getEndCycle() < cycle);
 	}
 
 	private void evaluateTick(int tick)
@@ -380,6 +391,9 @@ public class ChancedPlugin extends Plugin
 			{
 				last = attack;
 			}
+			log.debug("Chanced: tick {} hit {} from {} style {} max {} prayed {}", tick, damage,
+				attack != null ? attack.getSource() : null, attack != null ? attack.getStyle() : null,
+				attack != null ? attack.getMax() : null, attack != null && attack.isPrayed());
 			hits.add(new Hit(damage, false, attack));
 		}
 
@@ -436,6 +450,46 @@ public class ChancedPlugin extends Plugin
 			}
 		}
 		return false;
+	}
+
+	/**
+	 * The actor a projectile came from. Some NPCs' projectiles (the Hunllef's) carry no source
+	 * actor: take the NPC standing on the projectile's source tile, else the only NPC that started
+	 * an attack animation in the last {@value #NPC_ANIMATION_WINDOW} ticks.
+	 */
+	private Actor projectileSource(Projectile projectile)
+	{
+		Actor source = projectile.getSourceActor();
+		if (source != null)
+		{
+			return source;
+		}
+		WorldPoint from = projectile.getSourcePoint();
+		if (from != null)
+		{
+			for (NPC npc : client.getTopLevelWorldView().npcs())
+			{
+				WorldArea area = npc.getWorldArea();
+				if (area != null && area.distanceTo(from) <= 1)
+				{
+					return npc;
+				}
+			}
+		}
+		int tick = client.getTickCount();
+		Actor animating = null;
+		for (Pending p : pending)
+		{
+			if (!p.projectile && p.actor instanceof NPC && p.startTick >= tick - NPC_ANIMATION_WINDOW)
+			{
+				if (animating != null && animating != p.actor)
+				{
+					return null;
+				}
+				animating = p.actor;
+			}
+		}
+		return animating;
 	}
 
 	/** Marks an attack used, along with the same actor's other recent pieces of it. */

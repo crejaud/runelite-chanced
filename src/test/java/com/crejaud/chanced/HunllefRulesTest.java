@@ -5,6 +5,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import java.util.Collections;
+import net.runelite.api.gameval.AnimationID;
 import net.runelite.api.gameval.NpcID;
 import net.runelite.api.gameval.SpotanimID;
 import org.junit.Test;
@@ -42,6 +43,10 @@ public class HunllefRulesTest
 	private static final int PRAYED_HIT = 8;
 	private static final int TORNADO_HIT = 6;
 
+	/** Poses the Hunllef plays between attacks, on the tick the previous attack's hit lands. */
+	private static final int[] TRANSITIONS = {
+		AnimationID.HUNLLEF_ATTACK_TRANSITION_MAGIC, AnimationID.HUNLLEF_ATTACK_TRANSITION_RANGED,
+		AnimationID.HUNLLEF_ATTACK_TRANSITION_MAGIC_LOWPRIO, AnimationID.HUNLLEF_ATTACK_TRANSITION_RANGED_LOWPRIO};
 	private static final int[] PRAYER_ORBS = {
 		SpotanimID.CRYSTAL_HUNLLEF_PRAYER_TRAVEL, SpotanimID.CRYSTAL_HUNLLEF_PRAYER_TRAVEL_HM};
 
@@ -147,6 +152,20 @@ public class HunllefRulesTest
 		for (int orb : PRAYER_ORBS)
 		{
 			assertEquals(AttackStyle.MAGIC, table.projectile(orb));
+		}
+	}
+
+	@Test
+	public void styleTransitionsAreNotAttacks()
+	{
+		// GIVEN the bundled attack style snapshot
+		AttackStyleTable table = new AttackStyleTable();
+
+		// WHEN looking up the Hunllef's style transition poses
+		// THEN none is an attack a hit could be matched to
+		for (int transition : TRANSITIONS)
+		{
+			assertNull(table.animation(transition));
 		}
 	}
 }

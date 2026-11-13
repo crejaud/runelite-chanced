@@ -163,7 +163,7 @@ public class StyleTest
 	public void projectileStyleBeatsAnimation()
 	{
 		// GIVEN an NPC whose animation says ranged and which fired a magic projectile a tick later
-		ChancedPlugin.SeenProjectile magic = new ChancedPlugin.SeenProjectile(null, AttackStyle.MAGIC, ATTACK_TICK + 1);
+		ChancedPlugin.SeenProjectile magic = new ChancedPlugin.SeenProjectile(AttackStyle.MAGIC, ATTACK_TICK + 1);
 
 		// WHEN choosing the style of the attack matched by that animation, or by an unnamed one
 		AttackStyle fromRanged = ChancedPlugin.withProjectile(AttackStyle.RANGED, ATTACK_TICK, magic);
@@ -178,8 +178,8 @@ public class StyleTest
 	public void animationStandsWithoutAProjectileFromThatAttack()
 	{
 		// GIVEN magic projectiles from before the animation and from well after it
-		ChancedPlugin.SeenProjectile earlier = new ChancedPlugin.SeenProjectile(null, AttackStyle.MAGIC, ATTACK_TICK - 1);
-		ChancedPlugin.SeenProjectile later = new ChancedPlugin.SeenProjectile(null, AttackStyle.MAGIC,
+		ChancedPlugin.SeenProjectile earlier = new ChancedPlugin.SeenProjectile(AttackStyle.MAGIC, ATTACK_TICK - 1);
+		ChancedPlugin.SeenProjectile later = new ChancedPlugin.SeenProjectile(AttackStyle.MAGIC,
 			ATTACK_TICK + LATE_TICKS);
 
 		// WHEN choosing the style of a ranged animation, with no projectile, and of melee and special ones

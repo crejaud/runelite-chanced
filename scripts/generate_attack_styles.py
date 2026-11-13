@@ -40,8 +40,9 @@ PROJ_RULES = [
 ]
 ATTACK = re.compile(r"ATTACK|_ATK")
 PROJECTILE = re.compile(r"_PROJ|TRAVEL")
-# Player and object animations are not NPC attacks.
-SKIP = re.compile(r"^(HUMAN|PLAYER|BR_|SKILL|EMOTE|QIP)")
+# Player and object animations are not NPC attacks, nor are poses played between attacks
+# (the Hunllef's HUNLLEF_ATTACK_TRANSITION_* land on the tick of the previous attack's hit).
+SKIP = re.compile(r"^(HUMAN|PLAYER|BR_|SKILL|EMOTE|QIP)|TRANSITION")
 
 
 def constants(jar, cls):
