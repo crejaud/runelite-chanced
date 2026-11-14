@@ -1,0 +1,4 @@
+{
+  "chanceTicks": [],
+  "note": "Corrupted Hunllef's prayer-disabling orb (projectile 1714, no source actor) hit 4 through Protect from Magic. Its source was guessed as the invisible floor-crystal NPC 9039, so the hit fell to the Hunllef's RANGED-labelled launch animation and alerted as unprayed ranged 68. Report tagged guessed: true on the Hunllef's projectiles, which name no source."
+}

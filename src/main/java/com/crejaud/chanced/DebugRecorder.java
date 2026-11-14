@@ -4,29 +4,29 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
-import com.google.gson.JsonPrimitive;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import net.runelite.api.coords.WorldPoint;
 
 /**
  * Keeps the last {@value #KEEP_TICKS} ticks of what the plugin saw, for the debug report attached
- * to a Discord message. Events marked {@code "m": true} are the matcher's exact inputs, so a test
- * can replay a report through {@link HitMatcher}; the rest are clues for a person reading it.
+ * to a Discord message. Events marked {@code "m": true} are the matcher's raw inputs, what the
+ * client showed before any decision, so a test replays a report through {@link HitMatcher} and
+ * re-runs every decision; the rest are clues for a person reading it.
  * It holds no other player's name, no estimate of their gear and no public chat, so a replayed
  * PvP hit has no max hit to count.
  */
 final class DebugRecorder
 {
-	static final int FORMAT_VERSION = 1;
+	static final int FORMAT_VERSION = 2;
 	/** About a minute of game ticks. */
 	static final int KEEP_TICKS = 100;
 
 	static final String ANIMATION = "anim";
 	static final String PROJECTILE = "proj";
-	static final String SELF_DAMAGE = "self";
 	static final String TICK = "tick";
 	static final String TARGET_HIT = "targetHit";
 	static final String SPOTANIM = "spotanim";
@@ -34,6 +34,7 @@ final class DebugRecorder
 	static final String INVENTORY = "inv";
 	static final String OBJECT = "object";
 	static final String GRAPHIC = "graphic";
+	static final String TARGET = "target";
 
 	private final Deque<JsonObject> events = new ArrayDeque<>();
 	/** NPC ids the matcher had seen attacking in events already dropped from the window. */
@@ -45,36 +46,44 @@ final class DebugRecorder
 		seenBefore.clear();
 	}
 
-	void animation(int tick, ActorRef actor, int animation, AttackHint hint, boolean matcherInput,
-		Set<AttackStyle> prayers)
+	/**
+	 * An NPC's animation near the player, or a player's attacking them in PvP.
+	 *
+	 * @param seen the NPC id it showed attacking, or -1
+	 */
+	void animation(int tick, ActorRef actor, int animation, int seen, Set<AttackStyle> prayers)
 	{
-		JsonObject e = event(tick, ANIMATION, matcherInput);
+		JsonObject e = event(tick, ANIMATION, true);
 		e.add("a", ref(actor));
 		e.addProperty("id", animation);
-		e.add("hint", hint != null ? new JsonPrimitive(hint.name()) : JsonNull.INSTANCE);
+		e.addProperty("seen", seen);
 		e.add("pray", styles(prayers));
 	}
 
-	void projectile(int tick, int id, ActorRef source, boolean atMe, WorldPoint target, WorldPoint local,
-		int endCycle, AttackStyle style, Set<AttackStyle> prayers)
+	/**
+	 * A projectile at its launch: the source the client gave, or, when it gave none, the NPCs on or
+	 * next to its launch tile.
+	 *
+	 * @param seen the NPC id it showed attacking, or -1
+	 */
+	void projectile(int tick, int id, ActorRef clientSource, List<ActorRef> nearSource, boolean atMe,
+		WorldPoint target, WorldPoint local, int endCycle, int seen, Set<AttackStyle> prayers)
 	{
 		JsonObject e = event(tick, PROJECTILE, true);
 		e.addProperty("id", id);
-		e.add("a", ref(source));
+		e.add("a", ref(clientSource));
+		JsonArray near = new JsonArray();
+		if (nearSource != null)
+		{
+			nearSource.forEach(r -> near.add(ref(r)));
+		}
+		e.add("near", near);
 		e.addProperty("me", atMe);
 		e.add("to", point(target));
 		e.add("at", point(local));
 		e.addProperty("end", endCycle);
-		e.add("style", style != null ? new JsonPrimitive(style.name()) : JsonNull.INSTANCE);
+		e.addProperty("seen", seen);
 		e.add("pray", styles(prayers));
-	}
-
-	/** Self-damage the player triggered, at {@code hp} hitpoints. */
-	void selfDamage(int tick, SelfDamage source, int hp)
-	{
-		JsonObject e = event(tick, SELF_DAMAGE, true);
-		e.addProperty("source", source.name());
-		e.addProperty("hp", hp);
 	}
 
 	/** The end of a tick: the matcher's input and, on ticks with hits, what it decided. */
@@ -131,27 +140,32 @@ final class DebugRecorder
 		e.addProperty("type", type);
 	}
 
-	/** Spotanims now on the player ({@code on} "me") or their target ("target"). */
-	void spotAnims(int tick, String on, JsonArray ids)
+	/** Spotanims now on the player ({@code on} "me") or their target ("target"), at {@code hp}. */
+	void spotAnims(int tick, String on, JsonArray ids, int hp)
 	{
-		JsonObject e = event(tick, SPOTANIM, false);
+		JsonObject e = event(tick, SPOTANIM, TARGET.equals(on));
 		e.addProperty("on", on);
 		e.add("ids", ids);
+		e.addProperty("hp", hp);
 	}
 
 	/** A game message: these are about the player, never other players' chat. */
-	void chat(int tick, String type, String message)
+	void chat(int tick, String type, String message, int hp)
 	{
-		JsonObject e = event(tick, CHAT, false);
+		JsonObject e = event(tick, CHAT, true);
 		e.addProperty("type", type);
 		e.addProperty("msg", message);
+		e.addProperty("hp", hp);
 	}
 
-	void inventory(int tick, int itemId, int delta)
+	/** An inventory item's count changed by {@code delta}, at {@code hp} hitpoints. */
+	void inventory(int tick, int itemId, String name, int delta, int hp)
 	{
-		JsonObject e = event(tick, INVENTORY, false);
+		JsonObject e = event(tick, INVENTORY, true);
 		e.addProperty("id", itemId);
+		e.addProperty("name", name);
 		e.addProperty("delta", delta);
+		e.addProperty("hp", hp);
 	}
 
 	/** A game object spawned on or next to the player's tile: acid pools and the like. */
@@ -235,18 +249,7 @@ final class DebugRecorder
 	/** The NPC id an event showed attacking, as {@link HitMatcher} counts it, or null. */
 	static Integer seenAttacker(JsonObject e)
 	{
-		if (!e.has("m") || !e.has("a") || !e.get("a").isJsonObject())
-		{
-			return null;
-		}
-		JsonObject a = e.getAsJsonObject("a");
-		if (a.get("p").getAsBoolean())
-		{
-			return null;
-		}
-		String kind = e.get("k").getAsString();
-		boolean seen = ANIMATION.equals(kind) || PROJECTILE.equals(kind) && !e.get("style").isJsonNull();
-		return seen ? a.get("n").getAsInt() : null;
+		return e.has("seen") && e.get("seen").getAsInt() >= 0 ? e.get("seen").getAsInt() : null;
 	}
 
 	private JsonObject event(int tick, String kind, boolean matcherInput)

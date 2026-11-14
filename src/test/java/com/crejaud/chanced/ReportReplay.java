@@ -3,10 +3,12 @@ package com.crejaud.chanced;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import net.runelite.api.coords.WorldPoint;
@@ -17,6 +19,8 @@ final class ReportReplay
 	private static final int X = 0;
 	private static final int Y = 1;
 	private static final int PLANE = 2;
+	/** The bundled attack style table, as the plugin loads it. */
+	static final AttackStyleTable STYLES = new AttackStyleTable();
 
 	private ReportReplay()
 	{
@@ -26,7 +30,12 @@ final class ReportReplay
 	static Map<Integer, HitMatcher.Result> replay(JsonObject report)
 	{
 		Map<Integer, MonsterInfo> monsters = monsters(report.getAsJsonObject("monsters"));
-		HitMatcher matcher = new HitMatcher(monsters::get);
+		if (report.get("format").getAsInt() != DebugRecorder.FORMAT_VERSION)
+		{
+			throw new IllegalArgumentException("Report format " + report.get("format") + " is not "
+				+ DebugRecorder.FORMAT_VERSION + ": convert it, or replay it with the plugin version that wrote it");
+		}
+		HitMatcher matcher = new HitMatcher(monsters::get, STYLES);
 		for (JsonElement id : report.getAsJsonArray("seenBefore"))
 		{
 			matcher.seedSeenAttackers(Collections.singleton(id.getAsInt()));
@@ -43,18 +52,38 @@ final class ReportReplay
 			switch (e.get("k").getAsString())
 			{
 				case DebugRecorder.ANIMATION:
-					AttackStyle style = e.get("hint").isJsonNull() ? null
-						: AttackHint.valueOf(e.get("hint").getAsString()).toStyle();
-					matcher.animation(ref(e.get("a")), tick, style, styles(e.getAsJsonArray("pray")));
+					ActorRef actor = ref(e.get("a"));
+					Set<AttackStyle> prayers = styles(e.getAsJsonArray("pray"));
+					if (actor.isPlayer())
+					{
+						matcher.playerAnimation(actor, tick, prayers);
+					}
+					else
+					{
+						matcher.npcAnimation(actor, tick, e.get("id").getAsInt(), prayers);
+					}
 					break;
 				case DebugRecorder.PROJECTILE:
-					matcher.projectile(e.get("id").getAsInt(), ref(e.get("a")), e.get("me").getAsBoolean(),
-						point(e.get("to")), point(e.get("at")), tick, e.get("end").getAsInt(), style(e.get("style")),
+					List<ActorRef> near = new ArrayList<>();
+					e.getAsJsonArray("near").forEach(n -> near.add(ref(n)));
+					matcher.projectile(e.get("id").getAsInt(), ref(e.get("a")), near, e.get("me").getAsBoolean(),
+						point(e.get("to")), point(e.get("at")), tick, e.get("end").getAsInt(),
 						styles(e.getAsJsonArray("pray")));
 					break;
-				case DebugRecorder.SELF_DAMAGE:
-					matcher.selfDamage(SelfDamage.valueOf(e.get("source").getAsString()), tick,
-						e.get("hp").getAsInt());
+				case DebugRecorder.INVENTORY:
+					if (e.get("delta").getAsInt() < 0)
+					{
+						matcher.itemUsed(tick, e.get("name").getAsString(), e.get("hp").getAsInt());
+					}
+					break;
+				case DebugRecorder.CHAT:
+					matcher.gameMessage(tick, e.get("msg").getAsString(), e.get("hp").getAsInt());
+					break;
+				case DebugRecorder.SPOTANIM:
+					for (JsonElement id : e.getAsJsonArray("ids"))
+					{
+						matcher.targetSpotAnim(tick, id.getAsInt(), e.get("hp").getAsInt());
+					}
 					break;
 				case DebugRecorder.TICK:
 					TickState s = tickState(e);
@@ -157,11 +186,6 @@ final class ReportReplay
 		}
 		JsonArray a = json.getAsJsonArray();
 		return new WorldPoint(a.get(X).getAsInt(), a.get(Y).getAsInt(), a.get(PLANE).getAsInt());
-	}
-
-	private static AttackStyle style(JsonElement json)
-	{
-		return json == null || json.isJsonNull() ? null : AttackStyle.valueOf(json.getAsString());
 	}
 
 	private static Set<AttackStyle> styles(JsonArray json)

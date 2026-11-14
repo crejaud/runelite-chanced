@@ -47,7 +47,6 @@ import net.runelite.api.events.HitsplatApplied;
 import net.runelite.api.events.ItemContainerChanged;
 import net.runelite.api.events.ProjectileMoved;
 import net.runelite.api.gameval.InventoryID;
-import net.runelite.api.gameval.SpotanimID;
 import net.runelite.api.gameval.VarbitID;
 import net.runelite.api.kit.KitType;
 import net.runelite.client.audio.AudioPlayer;
@@ -61,7 +60,6 @@ import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.util.Filepath;
-import net.runelite.client.util.Text;
 import net.runelite.client.util.LinkBrowser;
 
 @Slf4j
@@ -83,8 +81,6 @@ public class ChancedPlugin extends Plugin
 	private static final int TEST_MAX_HIT = 8;
 	private static final int TEST_DAMAGE = 0;
 	private static final int TEST_HP = 8;
-	/** Ruby bolts (e)'s Blood Forfeit, which also costs the player 10% of their hitpoints. */
-	private static final int RUBY_BOLT_PROC = SpotanimID.XBOWS_BLOOD_SACRIFICE_SPOT_ANIM;
 	/** Hazards spawning this close to the player go in the debug report. */
 	private static final int HAZARD_DISTANCE = 1;
 
@@ -124,7 +120,8 @@ public class ChancedPlugin extends Plugin
 	@Inject
 	private Gson gson;
 
-	private final HitMatcher matcher = new HitMatcher(id -> maxHits.get(id));
+	/** Made in startUp, once the max hits and attack style table are injected. */
+	private HitMatcher matcher;
 	private final DebugRecorder recorder = new DebugRecorder();
 	/** Projectiles in flight already read, so each is read once. */
 	private final Set<Projectile> seenProjectiles = Collections.newSetFromMap(new IdentityHashMap<>());
@@ -137,6 +134,7 @@ public class ChancedPlugin extends Plugin
 	@Override
 	protected void startUp() throws Exception
 	{
+		matcher = new HitMatcher(id -> maxHits.get(id), attackStyles);
 		updateRecording();
 		loadMaxHits(false);
 	}
@@ -258,27 +256,23 @@ public class ChancedPlugin extends Plugin
 		}
 		int tick = client.getTickCount();
 		Set<AttackStyle> prayers = protectedStyles();
+		int seen;
 		if (actor instanceof NPC)
 		{
-			ActorRef ref = ref(actor);
-			AttackHint hint = attackStyles.animation(actor.getAnimation());
-			if (recording)
-			{
-				recorder.animation(tick, ref, actor.getAnimation(), hint, hint != null, prayers);
-			}
-			if (hint != null)
-			{
-				matcher.animation(ref, tick, hint.toStyle(), prayers);
-			}
+			seen = matcher.npcAnimation(ref(actor), tick, actor.getAnimation(), prayers);
 		}
 		else if (actor instanceof Player && actor.getInteracting() == local && pvpActive())
 		{
-			ActorRef ref = ref(actor);
-			if (recording)
-			{
-				recorder.animation(tick, ref, actor.getAnimation(), null, true, prayers);
-			}
-			matcher.animation(ref, tick, null, prayers);
+			matcher.playerAnimation(ref(actor), tick, prayers);
+			seen = -1;
+		}
+		else
+		{
+			return;
+		}
+		if (recording)
+		{
+			recorder.animation(tick, ref(actor), actor.getAnimation(), seen, prayers);
 		}
 	}
 
@@ -293,23 +287,23 @@ public class ChancedPlugin extends Plugin
 			return;
 		}
 		int tick = client.getTickCount();
-		AttackStyle style = attackStyles.projectile(projectile.getId());
-		ActorRef source = projectileSource(projectile, tick);
+		ActorRef source = projectile.getSourceActor() != null ? ref(projectile.getSourceActor()) : null;
+		List<ActorRef> nearSource = source == null ? npcsNear(projectile.getSourcePoint()) : Collections.emptyList();
 		boolean atMe = projectile.getTargetActor() == local;
 		WorldPoint target = projectile.getTargetPoint();
 		WorldPoint at = local.getWorldLocation();
 		Set<AttackStyle> prayers = protectedStyles();
+		int seen = matcher.projectile(projectile.getId(), source, nearSource, atMe, target, at, tick,
+			projectile.getEndCycle(), prayers);
 		if (atMe)
 		{
-			log.debug("Chanced: tick {} projectile {} style {} from {}", tick, projectile.getId(), style, source);
+			log.debug("Chanced: tick {} projectile {} from {} near {}", tick, projectile.getId(), source, nearSource);
 		}
 		if (recording)
 		{
-			recorder.projectile(tick, projectile.getId(), source, atMe, target, at, projectile.getEndCycle(), style,
-				prayers);
+			recorder.projectile(tick, projectile.getId(), source, nearSource, atMe, target, at,
+				projectile.getEndCycle(), seen, prayers);
 		}
-		matcher.projectile(projectile.getId(), source, atMe, target, at, tick, projectile.getEndCycle(), style,
-			prayers);
 	}
 
 	@Subscribe
@@ -327,18 +321,19 @@ public class ChancedPlugin extends Plugin
 			return;
 		}
 		int tick = client.getTickCount();
+		int hp = client.getBoostedSkillLevel(Skill.HITPOINTS);
+		JsonArray ids = new JsonArray();
+		for (ActorSpotAnim spot : actor.getSpotAnims())
+		{
+			ids.add(spot.getId());
+			if (target)
+			{
+				matcher.targetSpotAnim(tick, spot.getId(), hp);
+			}
+		}
 		if (recording)
 		{
-			JsonArray ids = new JsonArray();
-			for (ActorSpotAnim spot : actor.getSpotAnims())
-			{
-				ids.add(spot.getId());
-			}
-			recorder.spotAnims(tick, target ? "target" : "me", ids);
-		}
-		if (target && actor.hasSpotAnim(RUBY_BOLT_PROC))
-		{
-			selfDamage(SelfDamage.RUBY_BOLT, tick);
+			recorder.spotAnims(tick, target ? DebugRecorder.TARGET : "me", ids, hp);
 		}
 	}
 
@@ -365,17 +360,6 @@ public class ChancedPlugin extends Plugin
 		}
 	}
 
-	/** Self-damage the player just triggered, for the matcher and the report. */
-	private void selfDamage(SelfDamage source, int tick)
-	{
-		int hp = client.getBoostedSkillLevel(Skill.HITPOINTS);
-		matcher.selfDamage(source, tick, hp);
-		if (recording)
-		{
-			recorder.selfDamage(tick, source, hp);
-		}
-	}
-
 	@Subscribe
 	public void onChatMessage(ChatMessage event)
 	{
@@ -385,14 +369,11 @@ public class ChancedPlugin extends Plugin
 			return;
 		}
 		int tick = client.getTickCount();
+		int hp = client.getBoostedSkillLevel(Skill.HITPOINTS);
+		matcher.gameMessage(tick, event.getMessage(), hp);
 		if (recording)
 		{
-			recorder.chat(tick, event.getType().name(), event.getMessage());
-		}
-		SelfDamage source = SelfDamage.fromMessage(Text.removeTags(event.getMessage()));
-		if (source != null)
-		{
-			selfDamage(source, tick);
+			recorder.chat(tick, event.getType().name(), event.getMessage(), hp);
 		}
 	}
 
@@ -430,17 +411,15 @@ public class ChancedPlugin extends Plugin
 	/** A dose drunk shows as one fewer of the item: some potions cost the player hitpoints. */
 	private void inventoryChanged(int tick, int itemId, int delta)
 	{
-		if (recording)
-		{
-			recorder.inventory(tick, itemId, delta);
-		}
+		String name = client.getItemDefinition(itemId).getName();
+		int hp = client.getBoostedSkillLevel(Skill.HITPOINTS);
 		if (delta < 0)
 		{
-			SelfDamage source = SelfDamage.fromItem(client.getItemDefinition(itemId).getName());
-			if (source != null)
-			{
-				selfDamage(source, tick);
-			}
+			matcher.itemUsed(tick, name, hp);
+		}
+		if (recording)
+		{
+			recorder.inventory(tick, itemId, name, delta, hp);
 		}
 	}
 
@@ -583,31 +562,23 @@ public class ChancedPlugin extends Plugin
 		return null;
 	}
 
-	/**
-	 * The actor a projectile came from. Some NPCs' projectiles (the Hunllef's) carry no source
-	 * actor: take the NPC standing on the projectile's source tile, else the only NPC that just
-	 * started an attack animation.
-	 */
-	private ActorRef projectileSource(Projectile projectile, int tick)
+	/** The NPCs on or next to a tile: the candidates to have fired a projectile that names no source. */
+	private List<ActorRef> npcsNear(WorldPoint from)
 	{
-		Actor source = projectile.getSourceActor();
-		if (source != null)
+		List<ActorRef> near = new ArrayList<>();
+		if (from == null)
 		{
-			return ref(source);
+			return near;
 		}
-		WorldPoint from = projectile.getSourcePoint();
-		if (from != null)
+		for (NPC npc : client.getTopLevelWorldView().npcs())
 		{
-			for (NPC npc : client.getTopLevelWorldView().npcs())
+			WorldArea area = npc.getWorldArea();
+			if (area != null && area.distanceTo(from) <= 1)
 			{
-				WorldArea area = npc.getWorldArea();
-				if (area != null && area.distanceTo(from) <= 1)
-				{
-					return ref(npc);
-				}
+				near.add(ref(npc));
 			}
 		}
-		return matcher.onlyAnimatingNpc(tick);
+		return near;
 	}
 
 	private static Map<Integer, Integer> counts(ItemContainer container)

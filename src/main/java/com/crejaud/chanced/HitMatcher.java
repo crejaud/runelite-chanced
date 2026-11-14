@@ -130,6 +130,7 @@ final class HitMatcher
 	}
 
 	private final IntFunction<MonsterInfo> maxHits;
+	private final AttackStyleTable styles;
 	private final List<Pending> pending = new ArrayList<>();
 	/** Each NPC's latest projectile with a known style, whoever it targets. */
 	private final Map<ActorRef, SeenProjectile> lastProjectiles = new HashMap<>();
@@ -137,9 +138,10 @@ final class HitMatcher
 	private final Set<Integer> seenAttackers = new HashSet<>();
 	private final List<Expectation> expectations = new ArrayList<>();
 
-	HitMatcher(IntFunction<MonsterInfo> maxHits)
+	HitMatcher(IntFunction<MonsterInfo> maxHits, AttackStyleTable styles)
 	{
 		this.maxHits = maxHits;
+		this.styles = styles;
 	}
 
 	void clear()
@@ -173,38 +175,56 @@ final class HitMatcher
 	}
 
 	/**
-	 * An attack animation: an NPC's with a known attack hint, or a player's attacking us in PvP.
+	 * An NPC's animation near the player. Only attack animations the bundled table knows count.
 	 *
-	 * @param style the style the animation implies, null when unknown
+	 * @return the NPC id it showed attacking, or -1
 	 */
-	void animation(ActorRef actor, int tick, AttackStyle style, Set<AttackStyle> prayers)
+	int npcAnimation(ActorRef npc, int tick, int animation, Set<AttackStyle> prayers)
+	{
+		AttackHint hint = styles.animation(animation);
+		if (hint == null)
+		{
+			return -1;
+		}
+		addAnimation(npc, tick, hint.toStyle(), prayers);
+		seenAttackers.add(npc.getNpcId());
+		return npc.getNpcId();
+	}
+
+	/** A player attacking us in PvP. */
+	void playerAnimation(ActorRef player, int tick, Set<AttackStyle> prayers)
+	{
+		addAnimation(player, tick, null, prayers);
+	}
+
+	private void addAnimation(ActorRef actor, int tick, AttackStyle style, Set<AttackStyle> prayers)
 	{
 		Pending p = new Pending();
 		p.actor = actor;
 		p.startTick = tick;
 		p.style = style;
 		p.protectedAtStart = EnumSet.copyOf(prayersOrNone(prayers));
-		if (!actor.isPlayer())
-		{
-			seenAttackers.add(actor.getNpcId());
-		}
 		pending.add(p);
 	}
 
 	/**
 	 * A projectile seen at its launch.
 	 *
-	 * @param source the actor it came from, null when unknown
-	 * @param atMe   it targets the local player
-	 * @param target the tile it is aimed at
-	 * @param local  the player's tile at launch
-	 * @param style  the style its name implies, null when unknown
+	 * @param clientSource the actor the client says fired it, null when it names none
+	 * @param nearSource   when it names none, the NPCs on or next to its launch tile
+	 * @param atMe         it targets the local player
+	 * @param target       the tile it is aimed at
+	 * @param local        the player's tile at launch
+	 * @return the NPC id it showed attacking, or -1
 	 */
-	void projectile(int id, ActorRef source, boolean atMe, WorldPoint target, WorldPoint local, int tick, int endCycle,
-		AttackStyle style, Set<AttackStyle> prayers)
+	int projectile(int id, ActorRef clientSource, List<ActorRef> nearSource, boolean atMe, WorldPoint target,
+		WorldPoint local, int tick, int endCycle, Set<AttackStyle> prayers)
 	{
+		AttackStyle style = styles.projectile(id);
+		ActorRef source = clientSource != null ? clientSource : guessSource(nearSource, tick);
 		boolean npc = source != null && !source.isPlayer();
-		if (style != null && npc)
+		int seen = style != null && npc ? source.getNpcId() : -1;
+		if (seen >= 0)
 		{
 			lastProjectiles.put(source, new SeenProjectile(style, tick));
 			seenAttackers.add(source.getNpcId());
@@ -216,7 +236,7 @@ final class HitMatcher
 			// A special aimed at the player's tile, not at the player.
 			if (!npc || !AREA_SPECIALS.contains(id) || target == null || !inArea(target, local))
 			{
-				return;
+				return seen;
 			}
 			areaTarget = target;
 			pendingStyle = AttackStyle.SPECIAL;
@@ -230,6 +250,65 @@ final class HitMatcher
 		p.areaTarget = areaTarget;
 		p.protectedAtStart = EnumSet.copyOf(prayersOrNone(prayers));
 		pending.add(p);
+		return seen;
+	}
+
+	/**
+	 * The source of a projectile that names none (the Hunllef's): a monster with max hits on its
+	 * launch tile, not a helper NPC such as the Hunllef's invisible floor crystals; else the only
+	 * NPC that just started an attack animation.
+	 */
+	private ActorRef guessSource(List<ActorRef> nearSource, int tick)
+	{
+		if (nearSource != null)
+		{
+			for (ActorRef near : nearSource)
+			{
+				if (!near.isPlayer() && maxHits.apply(near.getNpcId()) != null)
+				{
+					return near;
+				}
+			}
+		}
+		return onlyAnimatingNpc(tick);
+	}
+
+	/** An item the player used up, at {@code hp} hitpoints: some potions cost hitpoints. */
+	void itemUsed(int tick, String itemName, int hp)
+	{
+		SelfDamage source = SelfDamage.fromItem(itemName);
+		if (source != null)
+		{
+			selfDamage(source, tick, hp);
+		}
+	}
+
+	/** A game message, at {@code hp} hitpoints: rock cakes and the locator orb announce their damage. */
+	void gameMessage(int tick, String message, int hp)
+	{
+		SelfDamage source = SelfDamage.fromMessage(message == null ? null : message.replaceAll("<[^>]*>", ""));
+		if (source != null)
+		{
+			selfDamage(source, tick, hp);
+		}
+	}
+
+	/** A spotanim on the player's target, at {@code hp} hitpoints: a ruby bolt proc costs hitpoints. */
+	void targetSpotAnim(int tick, int spotAnim, int hp)
+	{
+		if (spotAnim != SpotanimID.XBOWS_BLOOD_SACRIFICE_SPOT_ANIM)
+		{
+			return;
+		}
+		for (Expectation e : expectations)
+		{
+			if (e.source == SelfDamage.RUBY_BOLT && e.startTick == tick)
+			{
+				// The same proc, seen again as another spotanim joined it.
+				return;
+			}
+		}
+		selfDamage(SelfDamage.RUBY_BOLT, tick, hp);
 	}
 
 	/**

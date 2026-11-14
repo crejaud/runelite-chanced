@@ -3,6 +3,7 @@ package com.crejaud.chanced;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import java.util.Collections;
 import java.util.EnumSet;
@@ -74,7 +75,7 @@ public class HitMatcherTest
 			vorkath.put(AttackStyle.MAGIC, VORKATH_MAGIC);
 			vorkath.putSpecial(VORKATH_BOMB, BOMB);
 			monsters.put(NpcID.VORKATH, vorkath);
-			matcher = new HitMatcher(monsters::get);
+			matcher = new HitMatcher(monsters::get, ReportReplay.STYLES);
 		}
 
 		static int cycle(int tick)
@@ -82,17 +83,26 @@ public class HitMatcherTest
 			return tick * HitMatcher.CYCLES_PER_TICK;
 		}
 
-		void projectile(int id, boolean atMe, WorldPoint target, AttackStyle style)
+		void projectile(int id, boolean atMe, WorldPoint target)
 		{
 			int end = cycle(tick + FLIGHT_TICKS);
-			recorder.projectile(tick, id, VORKATH, atMe, target, at, end, style, prayers);
-			matcher.projectile(id, VORKATH, atMe, target, at, tick, end, style, prayers);
+			int seen = matcher.projectile(id, VORKATH, Collections.emptyList(), atMe, target, at, tick, end, prayers);
+			recorder.projectile(tick, id, VORKATH, Collections.emptyList(), atMe, target, at, end, seen, prayers);
 		}
 
-		void selfDamage(SelfDamage source, int hp)
+		/** Drinks or eats an item, as its inventory count drops by one. */
+		void use(String item, int hp)
 		{
-			recorder.selfDamage(tick, source, hp);
-			matcher.selfDamage(source, tick, hp);
+			matcher.itemUsed(tick, item, hp);
+			recorder.inventory(tick, -1, item, -1, hp);
+		}
+
+		void rubyProc(int hp)
+		{
+			matcher.targetSpotAnim(tick, SpotanimID.XBOWS_BLOOD_SACRIFICE_SPOT_ANIM, hp);
+			JsonArray ids = new JsonArray();
+			ids.add(SpotanimID.XBOWS_BLOOD_SACRIFICE_SPOT_ANIM);
+			recorder.spotAnims(tick, DebugRecorder.TARGET, ids, hp);
 		}
 
 		/** Ends the tick with these hits on the player, then moves to the next tick. */
@@ -147,7 +157,7 @@ public class HitMatcherTest
 	{
 		// GIVEN Vorkath seen attacking with its magic projectile
 		Fight fight = new Fight();
-		fight.projectile(SpotanimID.VORKATH_MAGIC_TRAVEL, true, PLAYER, AttackStyle.MAGIC);
+		fight.projectile(SpotanimID.VORKATH_MAGIC_TRAVEL, true, PLAYER);
 		fight.wait(LATER);
 
 		// WHEN an acid pool hits the player at low HP with no attack in flight
@@ -163,7 +173,7 @@ public class HitMatcherTest
 	{
 		// GIVEN Vorkath, not seen attacking yet, and a ruby bolt proc on it
 		Fight fight = new Fight();
-		fight.selfDamage(SelfDamage.RUBY_BOLT, LOW_HP + RUBY_SELF_DAMAGE);
+		fight.rubyProc(LOW_HP + RUBY_SELF_DAMAGE);
 
 		// WHEN the proc's self-damage lands at low HP
 		HitMatcher.Result result = fight.endTick(ONE_HP_AFTER, RUBY_SELF_DAMAGE);
@@ -178,7 +188,7 @@ public class HitMatcherTest
 	{
 		// GIVEN Vorkath's bomb aimed at the player's tile
 		Fight fight = new Fight();
-		fight.projectile(SpotanimID.VORKATH_AREA_TRAVEL, false, PLAYER, null);
+		fight.projectile(SpotanimID.VORKATH_AREA_TRAVEL, false, PLAYER);
 		fight.wait(FLIGHT_TICKS);
 
 		// WHEN it lands on the player
@@ -195,7 +205,7 @@ public class HitMatcherTest
 	{
 		// GIVEN Vorkath's bomb aimed at the player's tile, and the player one tile away when it lands
 		Fight fight = new Fight();
-		fight.projectile(SpotanimID.VORKATH_AREA_TRAVEL, false, PLAYER, null);
+		fight.projectile(SpotanimID.VORKATH_AREA_TRAVEL, false, PLAYER);
 		fight.wait(FLIGHT_TICKS);
 		fight.at = PLAYER.dx(1);
 
@@ -213,9 +223,9 @@ public class HitMatcherTest
 		// GIVEN a magic attack landing through Protect from Magic as the player drinks a divine potion
 		Fight fight = new Fight();
 		fight.prayers = EnumSet.of(AttackStyle.MAGIC);
-		fight.projectile(SpotanimID.VORKATH_MAGIC_TRAVEL, true, PLAYER, AttackStyle.MAGIC);
+		fight.projectile(SpotanimID.VORKATH_MAGIC_TRAVEL, true, PLAYER);
 		fight.wait(FLIGHT_TICKS);
-		fight.selfDamage(SelfDamage.DIVINE_POTION, HP_AT_DRINK);
+		fight.use("Divine super combat potion(4)", HP_AT_DRINK);
 
 		// WHEN the potion's 10 and the blocked 0 land on the same tick, the potion's first
 		HitMatcher.Result result = fight.endTick(HP_AFTER_DIVINE, DIVINE_DAMAGE, BLOCKED);
@@ -231,9 +241,9 @@ public class HitMatcherTest
 	{
 		// GIVEN Vorkath seen attacking, and the player drinking an overload
 		Fight fight = new Fight();
-		fight.projectile(SpotanimID.VORKATH_MAGIC_TRAVEL, true, PLAYER, AttackStyle.MAGIC);
+		fight.projectile(SpotanimID.VORKATH_MAGIC_TRAVEL, true, PLAYER);
 		fight.wait(LATER);
-		fight.selfDamage(SelfDamage.OVERLOAD, HP_AT_OVERLOAD);
+		fight.use("Overload (4)", HP_AT_OVERLOAD);
 
 		// WHEN its five hits of 10 land, one every other tick, the last at 1 HP
 		int self = 0;
@@ -254,7 +264,7 @@ public class HitMatcherTest
 		// GIVEN Nightmare Zone absorption points left
 		Fight fight = new Fight();
 		fight.absorption = ABSORPTION_POINTS;
-		fight.projectile(SpotanimID.VORKATH_AREA_TRAVEL, false, PLAYER, null);
+		fight.projectile(SpotanimID.VORKATH_AREA_TRAVEL, false, PLAYER);
 		fight.wait(FLIGHT_TICKS);
 
 		// WHEN a hit that could have killed lands at 1 HP
@@ -270,7 +280,7 @@ public class HitMatcherTest
 		// GIVEN Vorkath's bomb aimed two tiles from where the player now stands
 		Fight fight = new Fight();
 		WorldPoint away = PLAYER.dx(TWO_TILES);
-		fight.projectile(SpotanimID.VORKATH_AREA_TRAVEL, false, away, null);
+		fight.projectile(SpotanimID.VORKATH_AREA_TRAVEL, false, away);
 		fight.wait(FLIGHT_TICKS);
 
 		// WHEN acid hits the player at low HP as it lands
@@ -285,10 +295,10 @@ public class HitMatcherTest
 	{
 		// GIVEN a recorded fight: Vorkath seen, then acid, then a bomb on the player
 		Fight fight = new Fight();
-		fight.projectile(SpotanimID.VORKATH_MAGIC_TRAVEL, true, PLAYER, AttackStyle.MAGIC);
+		fight.projectile(SpotanimID.VORKATH_MAGIC_TRAVEL, true, PLAYER);
 		fight.wait(LATER);
 		HitMatcher.Result acid = fight.endTick(LOW_HP, ACID);
-		fight.projectile(SpotanimID.VORKATH_AREA_TRAVEL, false, PLAYER, null);
+		fight.projectile(SpotanimID.VORKATH_AREA_TRAVEL, false, PLAYER);
 		fight.wait(FLIGHT_TICKS);
 		int bombTick = fight.tick;
 		HitMatcher.Result bomb = fight.endTick(HP_AFTER_BOMB, BOMB_HIT);
