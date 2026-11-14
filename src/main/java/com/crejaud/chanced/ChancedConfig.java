@@ -15,6 +15,8 @@ public interface ChancedConfig extends Config
 	String WEBHOOK_WARNING = "This feature submits your IP address to a 3rd-party server not controlled or verified by RuneLite developers";
 	String TEST_CHAT = "testChat";
 	String TEST_DISCORD = "testDiscord";
+	String ATTACH_DEBUG_REPORT = "attachDebugReport";
+	String DEBUG_REPORT_FILE = "chanced-debug.json.gz";
 	String TEST_SOUND = "testSound";
 	String OPEN_SOUND_LIST = "openSoundList";
 	String SOUND_LIST_URL = "https://oldschool.runescape.wiki/w/List_of_in-game_sound_IDs";
@@ -251,11 +253,26 @@ public interface ChancedConfig extends Config
 	}
 
 	@ConfigItem(
+		keyName = ATTACH_DEBUG_REPORT,
+		name = "Attach debug report",
+		description = "Attach " + DEBUG_REPORT_FILE + " to each Discord message: what Chanced saw in the last minute "
+			+ "(your HP, prayers, gear and position, hits on you, attacks, projectiles and hazards near you, game "
+			+ "messages). Send it to the plugin author when an alert was wrong. It holds no other player's name and "
+			+ "goes only to your webhook",
+		section = discordSection,
+		position = 15
+	)
+	default boolean attachDebugReport()
+	{
+		return false;
+	}
+
+	@ConfigItem(
 		keyName = TEST_DISCORD,
 		name = "Send test",
 		description = "Tick to post a test message (Scurrius) to the webhook; it unticks itself",
 		section = discordSection,
-		position = 15
+		position = 16
 	)
 	default boolean testDiscord()
 	{

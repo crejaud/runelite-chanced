@@ -6,11 +6,13 @@ import com.google.gson.JsonObject;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.zip.GZIPOutputStream;
 import javax.annotation.Nonnull;
 import javax.imageio.ImageIO;
 import javax.inject.Inject;
@@ -34,7 +36,9 @@ import okhttp3.Response;
 class DiscordNotifier
 {
 	private static final MediaType PNG = MediaType.get("image/png");
+	private static final MediaType GZIP = MediaType.get("application/gzip");
 	private static final String SCREENSHOT = "chanced.png";
+	static final String DEBUG_REPORT = ChancedConfig.DEBUG_REPORT_FILE;
 	private static final int EMBED_COLOR = 0xC0392B;
 	/** Longest wait between retries, however many there are. */
 	private static final long MAX_RETRY_DELAY_MS = 60_000;
@@ -95,12 +99,16 @@ class DiscordNotifier
 		}
 	}
 
-	void send(ChancedEvent event, String template, String webhooks, boolean screenshot, Delivery delivery)
+	/**
+	 * @param report the debug report to attach, gzipped, as {@value #DEBUG_REPORT}, or null for none
+	 */
+	void send(ChancedEvent event, String template, String webhooks, boolean screenshot, String report,
+		Delivery delivery)
 	{
 		String payload = gson.toJson(payload(event, template, screenshot, delivery.footerText, delivery.footerIcon));
 		if (!screenshot)
 		{
-			post(webhooks, payload, null, delivery);
+			post(webhooks, payload, null, report, delivery);
 			return;
 		}
 		drawManager.requestNextFrameListener(image -> executor.execute(() ->
@@ -117,7 +125,7 @@ class DiscordNotifier
 			{
 				log.debug("Could not encode screenshot", e);
 			}
-			post(webhooks, payload, png, delivery);
+			post(webhooks, payload, png, report, delivery);
 		}));
 	}
 
@@ -191,12 +199,35 @@ class DiscordNotifier
 		return Math.min(delay, MAX_RETRY_DELAY_MS);
 	}
 
-	private void post(String webhooks, String payload, byte[] png, Delivery delivery)
+	/**
+	 * The report gzipped: Discord previews a text attachment in a tall box, but shows a .gz as a
+	 * one-line file, and the report shrinks several times over.
+	 */
+	static byte[] gzip(String report)
 	{
+		try
+		{
+			ByteArrayOutputStream out = new ByteArrayOutputStream();
+			try (GZIPOutputStream zip = new GZIPOutputStream(out))
+			{
+				zip.write(report.getBytes(StandardCharsets.UTF_8));
+			}
+			return out.toByteArray();
+		}
+		catch (IOException e)
+		{
+			log.debug("Could not compress the debug report", e);
+			return null;
+		}
+	}
+
+	private void post(String webhooks, String payload, byte[] png, String report, Delivery delivery)
+	{
+		byte[] zipped = report != null ? gzip(report) : null;
 		OkHttpClient client = httpClient.newBuilder()
 			.connectTimeout(delivery.networkTimeoutSeconds, TimeUnit.SECONDS)
 			.readTimeout(delivery.networkTimeoutSeconds, TimeUnit.SECONDS)
-			.writeTimeout(png != null ? delivery.imageWriteTimeoutSeconds : delivery.networkTimeoutSeconds,
+			.writeTimeout(png != null || report != null ? delivery.imageWriteTimeoutSeconds : delivery.networkTimeoutSeconds,
 				TimeUnit.SECONDS)
 			.build();
 		for (String line : webhooks.split("[\\r\\n]+"))
@@ -211,7 +242,11 @@ class DiscordNotifier
 				.addFormDataPart("payload_json", payload);
 			if (png != null)
 			{
-				body.addFormDataPart("file", SCREENSHOT, RequestBody.create(PNG, png));
+				body.addFormDataPart("files[0]", SCREENSHOT, RequestBody.create(PNG, png));
+			}
+			if (zipped != null)
+			{
+				body.addFormDataPart("files[1]", DEBUG_REPORT, RequestBody.create(GZIP, zipped));
 			}
 			Request request = new Request.Builder().url(url).post(body.build()).build();
 			attempt(client, request, 0, delivery);

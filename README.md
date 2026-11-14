@@ -26,18 +26,21 @@ flowchart TD
     D --> E{What landed?}
     E -- Projectile aimed at you --> F[Style from the projectile,<br/>else worst of the NPC's ranged/magic]
     E -- Attack animation --> G[Style from the animation,<br/>else worst of the NPC's styles]
-    E -- Nothing seen --> H{Nearest NPC attacking you<br/>has a special on the wiki?}
-    H -- Yes --> I[Use the special's max<br/>e.g. Rockfall]
-    H -- No --> J[Worst of its normal styles]
-    F & G & J --> L{Correct protection prayer up?}
+    E -- "Area special on your tile<br/>e.g. Vorkath's bomb" --> I[Use the special's max,<br/>half if you are next to it]
+    E -- "Self-damage you just triggered<br/>(ruby bolt proc, divine potion, brew,<br/>overload, rock cake, locator orb)" --> Y[Your own damage:<br/>counts at the damage dealt]
+    E -- Nothing seen --> H{Nearest NPC attacking you}
+    H -- "Seen attacking, next to you" --> K[Its melee]
+    H -- "Never seen attacking,<br/>no special on the wiki" --> J[Worst of its normal styles]
+    H -- "Otherwise: floor hazard,<br/>your own gear, the area" --> Y
+    F & G & J & K --> L{Correct protection prayer up?}
     L -- "No" --> M[Full wiki max hit]
     L -- "Yes, NPC" --> N{Did the hit get through anyway?}
     N -- No --> O[Blocked: max 0]
     N -- Yes --> P[Special on the wiki, e.g. prayer smash?<br/>use the special's max, else the damage dealt]
     L -- "Yes, player" --> Q[Estimated max x 0.6]
-    I & M & O & P & Q --> R[Sum the max of every attack this tick<br/>plus damage-over-time at the damage dealt]
+    I & M & O & P & Q & Y --> R[Sum the max of every attack this tick<br/>plus damage-over-time at the damage dealt]
     R --> S{Sum >= HP at the hit?}
-    S -- Yes --> T[Chanced! Chat message + Discord]
+    S -- "Yes, no Nightmare Zone absorption" --> T[Chanced! Chat message + Discord]
     S -- No --> X
 ```
 
@@ -88,6 +91,10 @@ The chat and Discord messages replace these with the chance's details:
 
 - OSRS Wiki API: one download of monster max hits per day.
 - Your Discord webhook, only when Discord is enabled.
+- *Attach debug report* (Discord section, off by default) adds `chanced-debug.json.gz` to each Discord message: what
+  Chanced saw in the last minute (your HP, prayers, gear and position, hits on you, attacks, projectiles and hazards
+  near you, game messages). It holds no other player's name and goes only to your webhook. Send it with a GitHub
+  issue when an alert was wrong.
 
 ## Development
 
@@ -96,6 +103,11 @@ The chat and Discord messages replace these with the chance's details:
 ./gradlew run      # launch RuneLite with the plugin (developer mode)
 ./gradlew --init-script config/checkstyle/checkstyle.gradle checkstyleMain checkstyleTest   # RuneLite code style
 ```
+
+A debug report from a wrong alert becomes a test: save the `chanced-debug.json.gz` as-is in
+`src/test/resources/reports/<name>.json.gz`, with `<name>.expect.json` next to it holding
+`{"chanceTicks": [], "note": "what really happened"}` (the ticks that really were chances).
+`ReportFixturesTest` replays it through the matcher.
 
 Optional, when shipping an update anyway: refresh the attack style snapshot from the latest RuneLite release.
 

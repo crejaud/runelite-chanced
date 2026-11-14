@@ -1,6 +1,8 @@
 package com.crejaud.chanced;
 
-import com.google.common.collect.ImmutableSet;
+import com.google.gson.Gson;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
 import com.google.inject.Provides;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -8,7 +10,6 @@ import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -18,9 +19,13 @@ import javax.sound.sampled.LineUnavailableException;
 import javax.sound.sampled.UnsupportedAudioFileException;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Actor;
+import net.runelite.api.ActorSpotAnim;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
-import net.runelite.api.HitsplatID;
+import net.runelite.api.GameObject;
+import net.runelite.api.GraphicsObject;
+import net.runelite.api.Item;
+import net.runelite.api.ItemContainer;
 import net.runelite.api.NPC;
 import net.runelite.api.Player;
 import net.runelite.api.PlayerComposition;
@@ -32,10 +37,17 @@ import net.runelite.api.WorldType;
 import net.runelite.api.coords.WorldArea;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.events.AnimationChanged;
+import net.runelite.api.events.ChatMessage;
 import net.runelite.api.events.CommandExecuted;
+import net.runelite.api.events.GameObjectSpawned;
 import net.runelite.api.events.GameTick;
+import net.runelite.api.events.GraphicChanged;
+import net.runelite.api.events.GraphicsObjectCreated;
 import net.runelite.api.events.HitsplatApplied;
+import net.runelite.api.events.ItemContainerChanged;
 import net.runelite.api.events.ProjectileMoved;
+import net.runelite.api.gameval.InventoryID;
+import net.runelite.api.gameval.SpotanimID;
 import net.runelite.api.gameval.VarbitID;
 import net.runelite.api.kit.KitType;
 import net.runelite.client.audio.AudioPlayer;
@@ -49,6 +61,7 @@ import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.util.Filepath;
+import net.runelite.client.util.Text;
 import net.runelite.client.util.LinkBrowser;
 
 @Slf4j
@@ -62,16 +75,7 @@ public class ChancedPlugin extends Plugin
 {
 	static final String REFRESH_COMMAND = "chancedrefresh";
 
-	/** Ticks an attack animation stays a candidate for a hit (NPC melee lands within a tick). */
-	private static final int NPC_ANIMATION_WINDOW = 2;
-	/** Players' spells without projectiles (barrage) land a few ticks after the cast. */
-	private static final int PLAYER_ANIMATION_WINDOW = 4;
-	private static final int CYCLES_PER_TICK = 30;
 	private static final int MAX_DISTANCE = 16;
-	/** Projectiles still unmatched this many ticks after launch are dropped. */
-	private static final int MAX_PROJECTILE_TICKS = 12;
-	/** A projectile counts as landed this tick if it landed up to this many ticks ago. */
-	private static final int LANDED_WINDOW_TICKS = 2;
 	private static final int PERCENT = 100;
 	/** Decibels per tenfold change in amplitude. */
 	private static final int DECIBELS_PER_DECADE = 20;
@@ -79,18 +83,10 @@ public class ChancedPlugin extends Plugin
 	private static final int TEST_MAX_HIT = 8;
 	private static final int TEST_DAMAGE = 0;
 	private static final int TEST_HP = 8;
-
-	private static final Set<Integer> OVER_TIME = ImmutableSet.of(
-		HitsplatID.POISON, HitsplatID.VENOM, HitsplatID.DISEASE, HitsplatID.BURN, HitsplatID.BLEED,
-		HitsplatID.DOOM, HitsplatID.CORRUPTION);
-	private static final Set<Integer> DAMAGE = ImmutableSet.of(
-		HitsplatID.BLOCK_ME, HitsplatID.BLOCK_OTHER, HitsplatID.DAMAGE_ME, HitsplatID.DAMAGE_OTHER,
-		HitsplatID.DAMAGE_ME_CYAN, HitsplatID.DAMAGE_OTHER_CYAN, HitsplatID.DAMAGE_ME_ORANGE,
-		HitsplatID.DAMAGE_OTHER_ORANGE, HitsplatID.DAMAGE_ME_YELLOW, HitsplatID.DAMAGE_OTHER_YELLOW,
-		HitsplatID.DAMAGE_ME_WHITE, HitsplatID.DAMAGE_OTHER_WHITE, HitsplatID.DAMAGE_MAX_ME,
-		HitsplatID.DAMAGE_MAX_ME_CYAN, HitsplatID.DAMAGE_MAX_ME_ORANGE, HitsplatID.DAMAGE_MAX_ME_YELLOW,
-		HitsplatID.DAMAGE_MAX_ME_WHITE, HitsplatID.DAMAGE_ME_POISE, HitsplatID.DAMAGE_OTHER_POISE,
-		HitsplatID.DAMAGE_MAX_ME_POISE);
+	/** Ruby bolts (e)'s Blood Forfeit, which also costs the player 10% of their hitpoints. */
+	private static final int RUBY_BOLT_PROC = SpotanimID.XBOWS_BLOOD_SACRIFICE_SPOT_ANIM;
+	/** Hazards spawning this close to the player go in the debug report. */
+	private static final int HAZARD_DISTANCE = 1;
 
 	@Inject
 	private Client client;
@@ -125,45 +121,23 @@ public class ChancedPlugin extends Plugin
 	@Inject
 	private ScheduledExecutorService executor;
 
-	/** An attack seen starting: an animation or a projectile. */
-	static final class Pending
-	{
-		Actor actor;
-		int startTick;
-		/** Projectile end cycle, or 0 for animations. */
-		int endCycle;
-		boolean projectile;
-		/** Style the animation or projectile name implies; null when unknown. */
-		AttackStyle style;
-		/** Protection prayers up when the attack started. */
-		Set<AttackStyle> protectedAtStart = EnumSet.noneOf(AttackStyle.class);
-		boolean consumed;
-	}
+	@Inject
+	private Gson gson;
 
-	/** The style of a projectile seen leaving an NPC, and the tick it was seen. */
-	static final class SeenProjectile
-	{
-		final AttackStyle style;
-		final int tick;
-
-		SeenProjectile(AttackStyle style, int tick)
-		{
-			this.style = style;
-			this.tick = tick;
-		}
-	}
-
-	private final List<Pending> pending = new ArrayList<>();
-	private final Map<Projectile, Pending> projectiles = new IdentityHashMap<>();
+	private final HitMatcher matcher = new HitMatcher(id -> maxHits.get(id));
+	private final DebugRecorder recorder = new DebugRecorder();
 	/** Projectiles in flight already read, so each is read once. */
 	private final Set<Projectile> seenProjectiles = Collections.newSetFromMap(new IdentityHashMap<>());
-	private final List<int[]> tickHits = new ArrayList<>();
-	/** Each NPC's latest projectile with a known style, whoever it targets. */
-	private final Map<Actor, SeenProjectile> lastProjectiles = new HashMap<>();
+	private final List<TickState.RawHit> tickHits = new ArrayList<>();
+	/** Inventory item counts, to see what the player drinks and eats. */
+	private final Map<Integer, Integer> inventory = new HashMap<>();
+	/** The debug report is on: Discord and its attachment are both enabled. */
+	private boolean recording;
 
 	@Override
 	protected void startUp() throws Exception
 	{
+		updateRecording();
 		loadMaxHits(false);
 	}
 
@@ -171,11 +145,11 @@ public class ChancedPlugin extends Plugin
 	protected void shutDown() throws Exception
 	{
 		discord.shutDown();
-		pending.clear();
-		projectiles.clear();
+		matcher.clear();
+		recorder.clear();
 		seenProjectiles.clear();
 		tickHits.clear();
-		lastProjectiles.clear();
+		inventory.clear();
 		maxHits.clear();
 	}
 
@@ -185,10 +159,25 @@ public class ChancedPlugin extends Plugin
 		return configManager.getConfig(ChancedConfig.class);
 	}
 
+	private void updateRecording()
+	{
+		boolean on = config.discordEnabled() && config.attachDebugReport();
+		if (!on)
+		{
+			recorder.clear();
+		}
+		recording = on;
+	}
+
 	@Subscribe
 	public void onConfigChanged(ConfigChanged event)
 	{
-		if (!ChancedConfig.GROUP.equals(event.getGroup()) || !"true".equals(event.getNewValue()))
+		if (!ChancedConfig.GROUP.equals(event.getGroup()))
+		{
+			return;
+		}
+		updateRecording();
+		if (!"true".equals(event.getNewValue()))
 		{
 			return;
 		}
@@ -232,7 +221,8 @@ public class ChancedPlugin extends Plugin
 			chat("Chanced: set a Discord webhook URL first.");
 			return;
 		}
-		discord.send(testEvent(), config.discordTemplate(), webhooks, config.sendScreenshot(),
+		ChancedEvent event = testEvent();
+		discord.send(event, config.discordTemplate(), webhooks, config.sendScreenshot(), debugReport(event),
 			DiscordNotifier.Delivery.from(config));
 		chat("Chanced: sent a test message to Discord.");
 	}
@@ -266,203 +256,344 @@ public class ChancedPlugin extends Plugin
 		{
 			return;
 		}
-		Pending p = new Pending();
-		p.actor = actor;
-		p.startTick = client.getTickCount();
-		p.protectedAtStart = protectedStyles();
+		int tick = client.getTickCount();
+		Set<AttackStyle> prayers = protectedStyles();
 		if (actor instanceof NPC)
 		{
+			ActorRef ref = ref(actor);
 			AttackHint hint = attackStyles.animation(actor.getAnimation());
-			if (hint == null)
+			if (recording)
 			{
-				return;
+				recorder.animation(tick, ref, actor.getAnimation(), hint, hint != null, prayers);
 			}
-			p.style = hint.toStyle();
+			if (hint != null)
+			{
+				matcher.animation(ref, tick, hint.toStyle(), prayers);
+			}
 		}
-		else if (!(actor instanceof Player && actor.getInteracting() == local && pvpActive()))
+		else if (actor instanceof Player && actor.getInteracting() == local && pvpActive())
 		{
-			return;
+			ActorRef ref = ref(actor);
+			if (recording)
+			{
+				recorder.animation(tick, ref, actor.getAnimation(), null, true, prayers);
+			}
+			matcher.animation(ref, tick, null, prayers);
 		}
-		pending.add(p);
 	}
 
 	@Subscribe
 	public void onProjectileMoved(ProjectileMoved event)
 	{
 		Projectile projectile = event.getProjectile();
-		AttackStyle style = attackStyles.projectile(projectile.getId());
 		Player local = client.getLocalPlayer();
 		// Moved fires every frame of a projectile's flight: read each one once, at its launch.
 		if (local == null || !seenProjectiles.add(projectile))
 		{
 			return;
 		}
-		Actor source = projectileSource(projectile);
-		if (style != null && source instanceof NPC)
+		int tick = client.getTickCount();
+		AttackStyle style = attackStyles.projectile(projectile.getId());
+		ActorRef source = projectileSource(projectile, tick);
+		boolean atMe = projectile.getTargetActor() == local;
+		WorldPoint target = projectile.getTargetPoint();
+		WorldPoint at = local.getWorldLocation();
+		Set<AttackStyle> prayers = protectedStyles();
+		if (atMe)
 		{
-			lastProjectiles.put(source, new SeenProjectile(style, client.getTickCount()));
+			log.debug("Chanced: tick {} projectile {} style {} from {}", tick, projectile.getId(), style, source);
 		}
-		if (projectile.getTargetActor() != local)
+		if (recording)
+		{
+			recorder.projectile(tick, projectile.getId(), source, atMe, target, at, projectile.getEndCycle(), style,
+				prayers);
+		}
+		matcher.projectile(projectile.getId(), source, atMe, target, at, tick, projectile.getEndCycle(), style,
+			prayers);
+	}
+
+	@Subscribe
+	public void onGraphicChanged(GraphicChanged event)
+	{
+		Player local = client.getLocalPlayer();
+		Actor actor = event.getActor();
+		if (local == null || actor == null)
 		{
 			return;
 		}
-		log.debug("Chanced: tick {} projectile {} style {} from {}", client.getTickCount(), projectile.getId(), style,
-			source != null ? source.getName() : null);
-		Pending p = new Pending();
-		p.actor = source;
-		p.startTick = client.getTickCount();
-		p.endCycle = projectile.getEndCycle();
-		p.projectile = true;
-		p.style = style;
-		p.protectedAtStart = protectedStyles();
-		projectiles.put(projectile, p);
-		pending.add(p);
+		boolean target = actor == local.getInteracting();
+		if (!target && actor != local)
+		{
+			return;
+		}
+		int tick = client.getTickCount();
+		if (recording)
+		{
+			JsonArray ids = new JsonArray();
+			for (ActorSpotAnim spot : actor.getSpotAnims())
+			{
+				ids.add(spot.getId());
+			}
+			recorder.spotAnims(tick, target ? "target" : "me", ids);
+		}
+		if (target && actor.hasSpotAnim(RUBY_BOLT_PROC))
+		{
+			selfDamage(SelfDamage.RUBY_BOLT, tick);
+		}
 	}
 
 	@Subscribe
 	public void onHitsplatApplied(HitsplatApplied event)
-	{
-		if (event.getActor() != client.getLocalPlayer())
-		{
-			return;
-		}
-		int type = event.getHitsplat().getHitsplatType();
-		boolean overTime = OVER_TIME.contains(type);
-		if (overTime || DAMAGE.contains(type))
-		{
-			tickHits.add(new int[]{event.getHitsplat().getAmount(), overTime ? 1 : 0});
-		}
-	}
-
-	@Subscribe
-	public void onGameTick(GameTick event)
-	{
-		int tick = client.getTickCount();
-		if (!tickHits.isEmpty())
-		{
-			evaluateTick(tick);
-			tickHits.clear();
-		}
-		pending.removeIf(p -> p.consumed || tick - p.startTick > MAX_PROJECTILE_TICKS
-			|| (!p.projectile && tick - p.startTick > PLAYER_ANIMATION_WINDOW));
-		projectiles.values().removeIf(p -> !pending.contains(p));
-		lastProjectiles.values().removeIf(s -> tick - s.tick > MAX_PROJECTILE_TICKS);
-		int cycle = client.getGameCycle();
-		seenProjectiles.removeIf(p -> p.getEndCycle() < cycle);
-	}
-
-	private void evaluateTick(int tick)
 	{
 		Player local = client.getLocalPlayer();
 		if (local == null)
 		{
 			return;
 		}
-		int hpAfter = client.getBoostedSkillLevel(Skill.HITPOINTS);
-		Iterator<Pending> next = candidates(tick, local).iterator();
-
-		List<Hit> hits = new ArrayList<>();
-		Attack last = null;
-		for (int[] raw : tickHits)
+		int type = event.getHitsplat().getHitsplatType();
+		int amount = event.getHitsplat().getAmount();
+		if (event.getActor() == local)
 		{
-			int damage = raw[0];
-			if (raw[1] == 1)
+			if (HitMatcher.counts(type))
 			{
-				hits.add(new Hit(damage, true, null));
-				continue;
+				tickHits.add(new TickState.RawHit(amount, type));
 			}
-			Attack attack = null;
-			while (attack == null && next.hasNext())
-			{
-				Pending p = next.next();
-				if (p.consumed)
-				{
-					continue;
-				}
-				consume(p, tick);
-				attack = toAttack(p, false);
-			}
-			if (attack == null)
-			{
-				// Out of seen attacks: a second hitsplat of the same attack, or an unseen one.
-				attack = last != null ? last : fallback(local);
-			}
-			if (attack != null)
-			{
-				last = attack;
-			}
-			log.debug("Chanced: tick {} hit {} from {} style {} max {} prayed {}", tick, damage,
-				attack != null ? attack.getSource() : null, attack != null ? attack.getStyle() : null,
-				attack != null ? attack.getMax() : null, attack != null && attack.isPrayed());
-			hits.add(new Hit(damage, false, attack));
 		}
-
-		Verdict verdict = ChanceCalculator.evaluate(hits, hpAfter);
-		if (verdict != null)
+		else if (recording && event.getActor() == local.getInteracting())
 		{
-			notify(ChancedEvent.of(verdict, local.getName() != null ? local.getName() : "Player", prayerName(),
+			recorder.targetHit(client.getTickCount(), amount, type);
+		}
+	}
+
+	/** Self-damage the player just triggered, for the matcher and the report. */
+	private void selfDamage(SelfDamage source, int tick)
+	{
+		int hp = client.getBoostedSkillLevel(Skill.HITPOINTS);
+		matcher.selfDamage(source, tick, hp);
+		if (recording)
+		{
+			recorder.selfDamage(tick, source, hp);
+		}
+	}
+
+	@Subscribe
+	public void onChatMessage(ChatMessage event)
+	{
+		// Game messages are about the player; other players' chat is never read.
+		if (event.getType() != ChatMessageType.GAMEMESSAGE && event.getType() != ChatMessageType.SPAM)
+		{
+			return;
+		}
+		int tick = client.getTickCount();
+		if (recording)
+		{
+			recorder.chat(tick, event.getType().name(), event.getMessage());
+		}
+		SelfDamage source = SelfDamage.fromMessage(Text.removeTags(event.getMessage()));
+		if (source != null)
+		{
+			selfDamage(source, tick);
+		}
+	}
+
+	@Subscribe
+	public void onItemContainerChanged(ItemContainerChanged event)
+	{
+		if (event.getContainerId() != InventoryID.INV)
+		{
+			return;
+		}
+		Map<Integer, Integer> now = counts(event.getItemContainer());
+		if (!inventory.isEmpty())
+		{
+			int tick = client.getTickCount();
+			for (Map.Entry<Integer, Integer> e : now.entrySet())
+			{
+				int delta = e.getValue() - inventory.getOrDefault(e.getKey(), 0);
+				if (delta != 0)
+				{
+					inventoryChanged(tick, e.getKey(), delta);
+				}
+			}
+			for (Map.Entry<Integer, Integer> e : inventory.entrySet())
+			{
+				if (!now.containsKey(e.getKey()))
+				{
+					inventoryChanged(tick, e.getKey(), -e.getValue());
+				}
+			}
+		}
+		inventory.clear();
+		inventory.putAll(now);
+	}
+
+	/** A dose drunk shows as one fewer of the item: some potions cost the player hitpoints. */
+	private void inventoryChanged(int tick, int itemId, int delta)
+	{
+		if (recording)
+		{
+			recorder.inventory(tick, itemId, delta);
+		}
+		if (delta < 0)
+		{
+			SelfDamage source = SelfDamage.fromItem(client.getItemDefinition(itemId).getName());
+			if (source != null)
+			{
+				selfDamage(source, tick);
+			}
+		}
+	}
+
+	@Subscribe
+	public void onGameObjectSpawned(GameObjectSpawned event)
+	{
+		Player local = client.getLocalPlayer();
+		GameObject object = event.getGameObject();
+		if (!recording || local == null || object == null)
+		{
+			return;
+		}
+		WorldPoint at = object.getWorldLocation();
+		if (closeTo(at, local))
+		{
+			recorder.object(client.getTickCount(), object.getId(), at);
+		}
+	}
+
+	@Subscribe
+	public void onGraphicsObjectCreated(GraphicsObjectCreated event)
+	{
+		Player local = client.getLocalPlayer();
+		GraphicsObject graphic = event.getGraphicsObject();
+		if (!recording || local == null || graphic == null || graphic.getLocation() == null)
+		{
+			return;
+		}
+		WorldPoint at = WorldPoint.fromLocal(client, graphic.getLocation());
+		if (closeTo(at, local))
+		{
+			recorder.graphic(client.getTickCount(), graphic.getId(), at);
+		}
+	}
+
+	@Subscribe
+	public void onGameTick(GameTick event)
+	{
+		Player local = client.getLocalPlayer();
+		TickState state = new TickState();
+		state.tick = client.getTickCount();
+		state.cycle = client.getGameCycle();
+		if (local != null && !tickHits.isEmpty())
+		{
+			fill(state, local);
+		}
+		tickHits.clear();
+		HitMatcher.Result result = matcher.endTick(state);
+		if (recording)
+		{
+			recorder.tick(state, result);
+			recorder.prune(state.tick);
+		}
+		if (result.verdict != null && local != null)
+		{
+			notify(ChancedEvent.of(result.verdict, local.getName() != null ? local.getName() : "Player", prayerName(),
 				client.getWorld()));
 		}
+		int cycle = client.getGameCycle();
+		seenProjectiles.removeIf(p -> p.getEndCycle() < cycle);
 	}
 
-	/** Attacks that could have landed this tick, most certain first. */
-	private List<Pending> candidates(int tick, Player local)
+	/** Reads everything the matcher needs to match this tick's hits. */
+	private void fill(TickState s, Player local)
 	{
-		int cycle = client.getGameCycle();
-		List<Pending> landed = new ArrayList<>();
-		List<Pending> atMe = new ArrayList<>();
-		List<Pending> others = new ArrayList<>();
-		for (Pending p : pending)
+		s.hits.addAll(tickHits);
+		s.hpAfter = client.getBoostedSkillLevel(Skill.HITPOINTS);
+		s.local = local.getWorldLocation();
+		s.prayers = protectedStyles();
+		s.pvpActive = pvpActive();
+		PlayerComposition comp = local.getPlayerComposition();
+		s.antiDragonShield = comp != null && DragonfireRules.SHIELDS.contains(comp.getEquipmentId(KitType.SHIELD));
+		s.antifire = client.getVarbitValue(VarbitID.ANTIFIRE_POTION) > 0;
+		s.superAntifire = client.getVarbitValue(VarbitID.SUPER_ANTIFIRE_POTION) > 0;
+		s.hunllefArmour = HunllefRules.armourPoints(local);
+		s.absorption = client.getVarbitValue(VarbitID.NZONE_ABSORB_POTION_EFFECTS);
+		WorldArea localArea = local.getWorldArea();
+		for (NPC npc : client.getTopLevelWorldView().npcs())
 		{
-			if (p.consumed || p.actor == null)
+			if (!near(npc, local))
 			{
 				continue;
 			}
-			if (p.projectile)
+			TickState.ActorState a = actorState(npc, local, localArea);
+			a.npcId = npc.getId();
+			a.name = npc.getName();
+			a.dead = npc.isDead();
+			s.actors.add(a);
+		}
+		if (!s.pvpActive)
+		{
+			return;
+		}
+		for (Player player : client.getTopLevelWorldView().players())
+		{
+			if (player == local || !near(player, local))
 			{
-				if (p.endCycle <= cycle + CYCLES_PER_TICK && p.endCycle >= cycle - LANDED_WINDOW_TICKS * CYCLES_PER_TICK)
+				continue;
+			}
+			TickState.ActorState a = actorState(player, local, localArea);
+			a.npcId = -1;
+			s.actors.add(a);
+			PvpEstimator.Gear gear = pvpEstimator.gear(player);
+			TickState.PlayerEstimate estimate = new TickState.PlayerEstimate();
+			estimate.name = player.getName();
+			estimate.weaponStyle = PvpEstimator.weaponStyle(gear);
+			for (AttackStyle style : AttackStyle.values())
+			{
+				if (style.isNormal())
 				{
-					landed.add(p);
+					estimate.max.put(style, PvpEstimator.maxHit(gear, style));
 				}
-				continue;
 			}
-			int window = p.actor instanceof Player ? PLAYER_ANIMATION_WINDOW : NPC_ANIMATION_WINDOW;
-			if (p.startTick < tick - window || inFlightFrom(p.actor))
-			{
-				continue;
-			}
-			(p.actor.getInteracting() == local ? atMe : others).add(p);
+			s.players.put(a.ref, estimate);
 		}
-		landed.addAll(atMe);
-		landed.addAll(others);
-		return landed;
 	}
 
-	/** The actor has a projectile on its way to us, so its animation's hit has not landed yet. */
-	private boolean inFlightFrom(Actor actor)
+	private TickState.ActorState actorState(Actor actor, Player local, WorldArea localArea)
 	{
-		int cycle = client.getGameCycle();
-		for (Pending p : pending)
+		TickState.ActorState a = new TickState.ActorState();
+		a.ref = ref(actor);
+		a.interactingMe = actor.getInteracting() == local;
+		a.distance = actor.getWorldLocation().distanceTo(local.getWorldLocation());
+		WorldArea area = actor.getWorldArea();
+		a.meleeRange = area != null && localArea != null && area.isInMeleeDistance(localArea);
+		return a;
+	}
+
+	private static ActorRef ref(Actor actor)
+	{
+		if (actor instanceof NPC)
 		{
-			if (p.projectile && !p.consumed && p.actor == actor && p.endCycle > cycle + CYCLES_PER_TICK)
-			{
-				return true;
-			}
+			NPC npc = (NPC) actor;
+			return ActorRef.npc(npc.getIndex(), npc.getId(), npc.getName());
 		}
-		return false;
+		if (actor instanceof Player)
+		{
+			return ActorRef.player(((Player) actor).getId());
+		}
+		return null;
 	}
 
 	/**
 	 * The actor a projectile came from. Some NPCs' projectiles (the Hunllef's) carry no source
-	 * actor: take the NPC standing on the projectile's source tile, else the only NPC that started
-	 * an attack animation in the last {@value #NPC_ANIMATION_WINDOW} ticks.
+	 * actor: take the NPC standing on the projectile's source tile, else the only NPC that just
+	 * started an attack animation.
 	 */
-	private Actor projectileSource(Projectile projectile)
+	private ActorRef projectileSource(Projectile projectile, int tick)
 	{
 		Actor source = projectile.getSourceActor();
 		if (source != null)
 		{
-			return source;
+			return ref(source);
 		}
 		WorldPoint from = projectile.getSourcePoint();
 		if (from != null)
@@ -472,220 +603,33 @@ public class ChancedPlugin extends Plugin
 				WorldArea area = npc.getWorldArea();
 				if (area != null && area.distanceTo(from) <= 1)
 				{
-					return npc;
+					return ref(npc);
 				}
 			}
 		}
-		int tick = client.getTickCount();
-		Actor animating = null;
-		for (Pending p : pending)
+		return matcher.onlyAnimatingNpc(tick);
+	}
+
+	private static Map<Integer, Integer> counts(ItemContainer container)
+	{
+		Map<Integer, Integer> counts = new HashMap<>();
+		if (container != null)
 		{
-			if (!p.projectile && p.actor instanceof NPC && p.startTick >= tick - NPC_ANIMATION_WINDOW)
+			for (Item item : container.getItems())
 			{
-				if (animating != null && animating != p.actor)
+				if (item.getId() >= 0)
 				{
-					return null;
-				}
-				animating = p.actor;
-			}
-		}
-		return animating;
-	}
-
-	/** Marks an attack used, along with the same actor's other recent pieces of it. */
-	private void consume(Pending used, int tick)
-	{
-		used.consumed = true;
-		for (Pending p : pending)
-		{
-			if (!p.consumed && p.actor == used.actor && (!p.projectile || used.projectile)
-				&& p.startTick >= tick - PLAYER_ANIMATION_WINDOW && p.startTick <= used.startTick + 1)
-			{
-				p.consumed = true;
-			}
-		}
-	}
-
-	/** No seen attack explains the hit: blame the nearest NPC attacking us. */
-	private Attack fallback(Player local)
-	{
-		NPC nearest = null;
-		int best = Integer.MAX_VALUE;
-		for (NPC npc : client.getTopLevelWorldView().npcs())
-		{
-			if (npc.getInteracting() != local || npc.isDead())
-			{
-				continue;
-			}
-			int d = npc.getWorldLocation().distanceTo(local.getWorldLocation());
-			if (d < best)
-			{
-				best = d;
-				nearest = npc;
-			}
-		}
-		if (nearest == null)
-		{
-			return null;
-		}
-		Pending p = new Pending();
-		p.actor = nearest;
-		p.protectedAtStart = protectedStyles();
-		return toAttack(p, true);
-	}
-
-	private Attack toAttack(Pending p, boolean unexplained)
-	{
-		if (p.actor instanceof NPC)
-		{
-			return npcAttack((NPC) p.actor, p, unexplained);
-		}
-		if (p.actor instanceof Player && pvpActive())
-		{
-			return playerAttack((Player) p.actor, p);
-		}
-		return null;
-	}
-
-	private Attack npcAttack(NPC npc, Pending p, boolean unexplained)
-	{
-		MonsterInfo info = maxHits.get(npc.getId());
-		if (info == null)
-		{
-			return null;
-		}
-		Set<AttackStyle> prayers = protectedStyles();
-		if (!p.projectile && !unexplained)
-		{
-			p.style = withProjectile(p.style, p.startTick, lastProjectiles.get(npc));
-		}
-		AttackStyle style = chooseStyle(info, p, unexplained, prayers);
-		if (style == null)
-		{
-			return null;
-		}
-		boolean prayed = style.isNormal() && (p.protectedAtStart.contains(style) || prayers.contains(style));
-		String name = npc.getName() != null ? npc.getName() : info.getName();
-		if (HunllefRules.isHunllef(npc.getId()))
-		{
-			// Unexplained hits in the Hunllef fight are its tornadoes and floor tiles.
-			return HunllefRules.attack(npc.getId(), name, unexplained ? AttackStyle.SPECIAL : style, prayed,
-				HunllefRules.armourPoints(client.getLocalPlayer()));
-		}
-		int specialMax = info.max(AttackStyle.SPECIAL);
-		if (specialMax > 0 && DragonfireRules.applies(info.getSpecialName()))
-		{
-			specialMax = DragonfireRules.max(specialMax, "King Black Dragon".equals(info.getName()),
-				dragonfireProtection(prayers));
-		}
-		return Attack.builder()
-			.source(name)
-			.style(style)
-			.max(style == AttackStyle.SPECIAL ? specialMax : info.max(style))
-			.prayed(prayed)
-			.specialMax(specialMax)
-			.specialName(info.getSpecialName())
-			.build();
-	}
-
-	/**
-	 * Style of an NPC attack matched by its animation. A projectile the NPC fired with that attack
-	 * wins for ranged and magic: animation names are labels, and some bosses (the Hunllef) play one
-	 * animation for both styles, while each style has its own projectile.
-	 */
-	static AttackStyle withProjectile(AttackStyle animation, int animationTick, SeenProjectile projectile)
-	{
-		if (projectile == null || animation == AttackStyle.MELEE || animation == AttackStyle.SPECIAL)
-		{
-			return animation;
-		}
-		int delay = projectile.tick - animationTick;
-		return delay >= 0 && delay <= NPC_ANIMATION_WINDOW ? projectile.style : animation;
-	}
-
-	private DragonfireRules.Protection dragonfireProtection(Set<AttackStyle> prayers)
-	{
-		DragonfireRules.Protection p = new DragonfireRules.Protection();
-		Player local = client.getLocalPlayer();
-		PlayerComposition comp = local != null ? local.getPlayerComposition() : null;
-		p.shield = comp != null && DragonfireRules.SHIELDS.contains(comp.getEquipmentId(KitType.SHIELD));
-		p.prayer = prayers.contains(AttackStyle.MAGIC);
-		p.antifire = client.getVarbitValue(VarbitID.ANTIFIRE_POTION) > 0;
-		p.superAntifire = client.getVarbitValue(VarbitID.SUPER_ANTIFIRE_POTION) > 0;
-		return p;
-	}
-
-	/**
-	 * The style an NPC attack most likely used. Specials only explain a hit no normal style
-	 * does; when the style is unclear, take the worst case for the player.
-	 */
-	static AttackStyle chooseStyle(MonsterInfo info, Pending p, boolean unexplained, Set<AttackStyle> prayers)
-	{
-		Set<AttackStyle> options = EnumSet.noneOf(AttackStyle.class);
-		if (unexplained || p.style == AttackStyle.SPECIAL)
-		{
-			if (info.has(AttackStyle.SPECIAL))
-			{
-				return AttackStyle.SPECIAL;
-			}
-		}
-		else if (p.style != null)
-		{
-			if (info.has(p.style))
-			{
-				return p.style;
-			}
-		}
-		else if (p.projectile)
-		{
-			if (info.has(AttackStyle.RANGED))
-			{
-				options.add(AttackStyle.RANGED);
-			}
-			if (info.has(AttackStyle.MAGIC))
-			{
-				options.add(AttackStyle.MAGIC);
-			}
-		}
-		if (options.isEmpty())
-		{
-			for (AttackStyle style : info.getMaxHits().keySet())
-			{
-				if (style.isNormal())
-				{
-					options.add(style);
+					counts.merge(item.getId(), item.getQuantity(), Integer::sum);
 				}
 			}
 		}
-		if (options.isEmpty())
-		{
-			return info.has(AttackStyle.SPECIAL) ? AttackStyle.SPECIAL : null;
-		}
-		AttackStyle worst = null;
-		int worstMax = -1;
-		for (AttackStyle style : options)
-		{
-			int max = prayers.contains(style) ? 0 : info.max(style);
-			if (max > worstMax)
-			{
-				worst = style;
-				worstMax = max;
-			}
-		}
-		return worst;
+		return counts;
 	}
 
-	private Attack playerAttack(Player player, Pending p)
+	private static boolean closeTo(WorldPoint at, Player local)
 	{
-		PvpEstimator.Gear gear = pvpEstimator.gear(player);
-		AttackStyle style = p.style != null && p.style.isNormal() ? p.style : PvpEstimator.weaponStyle(gear);
-		return Attack.builder()
-			.source(player.getName() != null ? player.getName() : "A player")
-			.style(style)
-			.max(PvpEstimator.maxHit(gear, style))
-			.prayed(p.protectedAtStart.contains(style) || protectedStyles().contains(style))
-			.player(true)
-			.build();
+		WorldPoint me = local.getWorldLocation();
+		return at != null && me != null && at.getPlane() == me.getPlane() && at.distanceTo2D(me) <= HAZARD_DISTANCE;
 	}
 
 	private boolean near(Actor actor, Player local)
@@ -736,6 +680,58 @@ public class ChancedPlugin extends Plugin
 		return style == AttackStyle.RANGED ? "Protect from Missiles" : "Protect from " + style.getDisplayName();
 	}
 
+	/** The debug report as JSON, or null when the setting is off. */
+	private String debugReport(ChancedEvent event)
+	{
+		if (!recording)
+		{
+			return null;
+		}
+		JsonObject header = new JsonObject();
+		header.addProperty("plugin", "chanced");
+		header.addProperty("tick", client.getTickCount());
+		header.addProperty("world", client.getWorld());
+		JsonArray types = new JsonArray();
+		client.getWorldType().forEach(t -> types.add(t.name()));
+		header.add("worldTypes", types);
+		Player local = client.getLocalPlayer();
+		if (local != null && local.getWorldLocation() != null)
+		{
+			header.addProperty("region", local.getWorldLocation().getRegionID());
+		}
+		header.addProperty("hpLevel", client.getRealSkillLevel(Skill.HITPOINTS));
+		header.addProperty("absorption", client.getVarbitValue(VarbitID.NZONE_ABSORB_POTION_EFFECTS));
+		JsonArray worn = new JsonArray();
+		ItemContainer equipment = client.getItemContainer(InventoryID.WORN);
+		if (equipment != null)
+		{
+			for (Item item : equipment.getItems())
+			{
+				worn.add(item.getId());
+			}
+		}
+		header.add("equipment", worn);
+		JsonObject chance = new JsonObject();
+		chance.addProperty("source", event.getSource());
+		chance.addProperty("style", event.getStyle());
+		chance.addProperty("maxHit", event.getMaxHit());
+		chance.addProperty("damage", event.getDamage());
+		chance.addProperty("hpBefore", event.getHpBefore());
+		chance.addProperty("hpAfter", event.getHpAfter());
+		chance.addProperty("prayer", event.getPrayer());
+		header.add("alert", chance);
+		JsonObject monsters = new JsonObject();
+		for (int id : recorder.npcIds())
+		{
+			MonsterInfo info = maxHits.get(id);
+			if (info != null)
+			{
+				monsters.add(String.valueOf(id), DebugRecorder.monster(info));
+			}
+		}
+		return gson.toJson(recorder.report(header, monsters));
+	}
+
 	private void notify(ChancedEvent event)
 	{
 		log.debug("Chanced: {}", event);
@@ -754,7 +750,7 @@ public class ChancedPlugin extends Plugin
 		String webhooks = config.webhookUrl();
 		if (config.discordEnabled() && webhooks != null && !webhooks.trim().isEmpty())
 		{
-			discord.send(event, config.discordTemplate(), webhooks, config.sendScreenshot(),
+			discord.send(event, config.discordTemplate(), webhooks, config.sendScreenshot(), debugReport(event),
 				DiscordNotifier.Delivery.from(config));
 		}
 	}

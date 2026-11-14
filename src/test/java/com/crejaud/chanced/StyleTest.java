@@ -49,9 +49,9 @@ public class StyleTest
 		return info;
 	}
 
-	private static ChancedPlugin.Pending pending(AttackStyle style, boolean projectile)
+	private static HitMatcher.Pending pending(AttackStyle style, boolean projectile)
 	{
-		ChancedPlugin.Pending p = new ChancedPlugin.Pending();
+		HitMatcher.Pending p = new HitMatcher.Pending();
 		p.style = style;
 		p.projectile = projectile;
 		return p;
@@ -82,10 +82,10 @@ public class StyleTest
 	public void knownStyleWins()
 	{
 		// GIVEN a Scurrius attack whose animation says melee
-		ChancedPlugin.Pending attack = pending(AttackStyle.MELEE, false);
+		HitMatcher.Pending attack = pending(AttackStyle.MELEE, false);
 
 		// WHEN choosing its style while praying melee
-		AttackStyle style = ChancedPlugin.chooseStyle(scurrius(), attack, false, EnumSet.of(AttackStyle.MELEE));
+		AttackStyle style = HitMatcher.chooseStyle(scurrius(), attack, false, EnumSet.of(AttackStyle.MELEE));
 
 		// THEN it stays melee
 		assertEquals(AttackStyle.MELEE, style);
@@ -95,12 +95,12 @@ public class StyleTest
 	public void unknownProjectileTakesWorstUnprayedStyle()
 	{
 		// GIVEN a Scurrius projectile of unknown style
-		ChancedPlugin.Pending projectile = pending(null, true);
+		HitMatcher.Pending projectile = pending(null, true);
 
 		// WHEN choosing its style while praying magic, and while praying nothing
-		AttackStyle prayingMagic = ChancedPlugin.chooseStyle(scurrius(), projectile, false,
+		AttackStyle prayingMagic = HitMatcher.chooseStyle(scurrius(), projectile, false,
 			EnumSet.of(AttackStyle.MAGIC));
-		AttackStyle prayingNothing = ChancedPlugin.chooseStyle(scurrius(), projectile, false, NONE);
+		AttackStyle prayingNothing = HitMatcher.chooseStyle(scurrius(), projectile, false, NONE);
 
 		// THEN it is the worst unprayed of ranged and magic
 		assertEquals(AttackStyle.RANGED, prayingMagic);
@@ -115,12 +115,47 @@ public class StyleTest
 		goblin.put(AttackStyle.MELEE, 1);
 
 		// WHEN each lands a hit with no attack seen
-		AttackStyle scurriusStyle = ChancedPlugin.chooseStyle(scurrius(), pending(null, false), true, NONE);
-		AttackStyle goblinStyle = ChancedPlugin.chooseStyle(goblin, pending(null, false), true, NONE);
+		AttackStyle scurriusStyle = HitMatcher.chooseStyle(scurrius(), pending(null, false), true, NONE);
+		AttackStyle goblinStyle = HitMatcher.chooseStyle(goblin, pending(null, false), true, NONE);
 
 		// THEN Scurrius's hit is the special and the goblin's is its normal style
 		assertEquals(AttackStyle.SPECIAL, scurriusStyle);
 		assertEquals(AttackStyle.MELEE, goblinStyle);
+	}
+
+	@Test
+	public void unseenHitIsNotTheSpecialOfAnNpcWhoseAttacksWeSee()
+	{
+		// GIVEN Scurrius, already seen attacking by its known animations and projectiles
+		MonsterInfo info = scurrius();
+
+		// WHEN a hit no attack explains lands, from range and from next to it
+		HitMatcher.Blame fromRange = HitMatcher.blame(info, true, false, false);
+		HitMatcher.Blame fromMelee = HitMatcher.blame(info, true, false, true);
+
+		// THEN from range it is not Scurrius's hit (floor hazards, ruby bolts), and next to it only its melee
+		assertEquals(HitMatcher.Blame.NONE, fromRange);
+		assertEquals(HitMatcher.Blame.MELEE, fromMelee);
+	}
+
+	@Test
+	public void unseenHitIsNeverASpecialExceptTheHunllefs()
+	{
+		// GIVEN Scurrius, never seen attacking, whose special is its rockfall, and a goblin with none
+		MonsterInfo goblin = new MonsterInfo("Goblin");
+		goblin.put(AttackStyle.MELEE, 1);
+
+		// WHEN a hit no attack explains lands from range
+		HitMatcher.Blame scurrius = HitMatcher.blame(scurrius(), false, false, false);
+		HitMatcher.Blame unseenGoblin = HitMatcher.blame(goblin, false, false, false);
+		HitMatcher.Blame hunllef = HitMatcher.blame(scurrius(), true, true, false);
+		HitMatcher.Blame unknownNpc = HitMatcher.blame(null, false, false, false);
+
+		// THEN a boss with floor hazards takes no blame, the goblin its normal style, the Hunllef its hazards
+		assertEquals(HitMatcher.Blame.NONE, scurrius);
+		assertEquals(HitMatcher.Blame.WORST_NORMAL, unseenGoblin);
+		assertEquals(HitMatcher.Blame.HUNLLEF_HAZARD, hunllef);
+		assertEquals(HitMatcher.Blame.NONE, unknownNpc);
 	}
 
 	@Test
@@ -163,11 +198,11 @@ public class StyleTest
 	public void projectileStyleBeatsAnimation()
 	{
 		// GIVEN an NPC whose animation says ranged and which fired a magic projectile a tick later
-		ChancedPlugin.SeenProjectile magic = new ChancedPlugin.SeenProjectile(AttackStyle.MAGIC, ATTACK_TICK + 1);
+		HitMatcher.SeenProjectile magic = new HitMatcher.SeenProjectile(AttackStyle.MAGIC, ATTACK_TICK + 1);
 
 		// WHEN choosing the style of the attack matched by that animation, or by an unnamed one
-		AttackStyle fromRanged = ChancedPlugin.withProjectile(AttackStyle.RANGED, ATTACK_TICK, magic);
-		AttackStyle fromUnknown = ChancedPlugin.withProjectile(null, ATTACK_TICK, magic);
+		AttackStyle fromRanged = HitMatcher.withProjectile(AttackStyle.RANGED, ATTACK_TICK, magic);
+		AttackStyle fromUnknown = HitMatcher.withProjectile(null, ATTACK_TICK, magic);
 
 		// THEN the projectile's style wins
 		assertEquals(AttackStyle.MAGIC, fromRanged);
@@ -178,16 +213,16 @@ public class StyleTest
 	public void animationStandsWithoutAProjectileFromThatAttack()
 	{
 		// GIVEN magic projectiles from before the animation and from well after it
-		ChancedPlugin.SeenProjectile earlier = new ChancedPlugin.SeenProjectile(AttackStyle.MAGIC, ATTACK_TICK - 1);
-		ChancedPlugin.SeenProjectile later = new ChancedPlugin.SeenProjectile(AttackStyle.MAGIC,
+		HitMatcher.SeenProjectile earlier = new HitMatcher.SeenProjectile(AttackStyle.MAGIC, ATTACK_TICK - 1);
+		HitMatcher.SeenProjectile later = new HitMatcher.SeenProjectile(AttackStyle.MAGIC,
 			ATTACK_TICK + LATE_TICKS);
 
 		// WHEN choosing the style of a ranged animation, with no projectile, and of melee and special ones
-		AttackStyle none = ChancedPlugin.withProjectile(AttackStyle.RANGED, ATTACK_TICK, null);
-		AttackStyle stale = ChancedPlugin.withProjectile(AttackStyle.RANGED, ATTACK_TICK, earlier);
-		AttackStyle tooLate = ChancedPlugin.withProjectile(AttackStyle.RANGED, ATTACK_TICK, later);
-		AttackStyle melee = ChancedPlugin.withProjectile(AttackStyle.MELEE, ATTACK_TICK, later);
-		AttackStyle special = ChancedPlugin.withProjectile(AttackStyle.SPECIAL, ATTACK_TICK + LATE_TICKS, later);
+		AttackStyle none = HitMatcher.withProjectile(AttackStyle.RANGED, ATTACK_TICK, null);
+		AttackStyle stale = HitMatcher.withProjectile(AttackStyle.RANGED, ATTACK_TICK, earlier);
+		AttackStyle tooLate = HitMatcher.withProjectile(AttackStyle.RANGED, ATTACK_TICK, later);
+		AttackStyle melee = HitMatcher.withProjectile(AttackStyle.MELEE, ATTACK_TICK, later);
+		AttackStyle special = HitMatcher.withProjectile(AttackStyle.SPECIAL, ATTACK_TICK + LATE_TICKS, later);
 
 		// THEN the animation's style stands
 		assertEquals(AttackStyle.RANGED, none);
